@@ -13,6 +13,10 @@ on:
         description: '每分片最多处理图数(0=不限)'
         required: false
         default: '0'
+      all:
+        description: '1=忽略已处理状态(演练/重跑)'
+        required: false
+        default: '0'
 
 jobs:
   prepare:
@@ -48,7 +52,7 @@ jobs:
         run: |
           SHARD="${{ matrix.shard }}/${{ inputs.shards }}"
           curl -fsSL -H "X-GA-Token: $API_TOKEN" \
-            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&shard=$SHARD&limit=500" \
+            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&shard=$SHARD&limit=500&all=${{ inputs.all }}" \
             -o manifest.json
           python3 -c "import json; d=json.load(open('manifest.json')); print('shard',d['shard'],'items',d['count'])"
 
