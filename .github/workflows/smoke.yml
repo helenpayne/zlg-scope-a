@@ -16,6 +16,7 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: env probe
         run: |
           echo "ip: $(curl -s ifconfig.me || echo n/a)"
@@ -24,7 +25,7 @@ jobs:
       - name: download test image
         run: |
           URL="${{ inputs.img_url }}"
-          [ -z "$URL" ] && URL=$(head -1 work/t1.url.txt)
+          [ -z "$URL" ] && URL=$(head -1 work/t1.url.txt 2>/dev/null || true)
           echo "::add-mask::$URL"
           mkdir -p work
           echo "--- 裸curl ---"
