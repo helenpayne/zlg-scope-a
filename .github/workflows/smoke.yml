@@ -1,5 +1,7 @@
 name: smoke
 on:
+  push:
+    paths: ['.github/workflows/smoke.yml', 'work/t1.url.txt']
   workflow_dispatch:
     inputs:
       img_url:
@@ -16,14 +18,16 @@ jobs:
     steps:
       - name: env probe
         run: |
-          echo "::add-mask::${{ inputs.img_url }}"
           echo "ip: $(curl -s ifconfig.me || echo n/a)"
           node --version; npm --version; python3 --version
 
       - name: download test image
         run: |
+          URL="${{ inputs.img_url }}"
+          [ -z "$URL" ] && URL=$(head -1 work/t1.url.txt)
+          echo "::add-mask::$URL"
           mkdir -p work
-          time curl -fsSL -o work/t1.jpg "${{ inputs.img_url }}"
+          time curl -fsSL -o work/t1.jpg "$URL"
           ls -la work/
 
       - name: install cline
