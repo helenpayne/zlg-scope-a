@@ -1,0 +1,65 @@
+name: pipeline
+on:
+  workflow_dispatch:
+    inputs:
+      issue:
+        description: '期号, 如 273 或 2026273'
+        required: true
+      shards:
+        description: '分片数'
+        required: false
+        default: '8'
+      max_per_shard:
+        description: '每分片最多处理图数(0=不限)'
+        required: false
+        default: '0'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.gen.outputs.shards }}
+    steps:
+      - id: gen
+        run: |
+          N=${{ inputs.shards }}
+          echo "shards=$(seq 0 $((N-1)) | jq -c -R 'tonumber' | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  work:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: setup
+        run: |
+          python3 -m pip install --quiet pillow 2>&1 | tail -1
+          npm install -g opencode-ai 2>&1 | tail -1
+          node --version; opencode --version 2>&1 | head -1
+
+      - name: pull manifest
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          SHARD="${{ matrix.shard }}/${{ inputs.shards }}"
+          curl -fsSL -H "X-GA-Token: $API_TOKEN" \
+            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&shard=$SHARD&limit=500" \
+            -o manifest.json
+          python3 -c "import json; d=json.load(open('manifest.json')); print('shard',d['shard'],'items',d['count'])"
+
+      - name: process images
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          MAXN: ${{ inputs.max_per_shard }}
+        run: |
+          python3 .github/scripts/ga_worker.py
+
+      - name: done
+        if: always()
+        run: cat work/report.json 2>/dev/null || echo no-report
