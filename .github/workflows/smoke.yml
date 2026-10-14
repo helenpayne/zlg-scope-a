@@ -1,0 +1,40 @@
+name: smoke
+on:
+  workflow_dispatch:
+    inputs:
+      img_url:
+        description: 'test image url'
+        required: true
+      model:
+        description: 'cline model'
+        required: false
+        default: 'cline-free/mimo-v2.6-flash'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: env probe
+        run: |
+          echo "::add-mask::${{ inputs.img_url }}"
+          echo "ip: $(curl -s ifconfig.me || echo n/a)"
+          node --version; npm --version; python3 --version
+
+      - name: download test image
+        run: |
+          mkdir -p work
+          time curl -fsSL -o work/t1.jpg "${{ inputs.img_url }}"
+          ls -la work/
+
+      - name: install cline
+        run: npm install -g cline 2>&1 | tail -3
+
+      - name: vision extract
+        env:
+          CLINE_NO_AUTO_UPDATE: "1"
+        run: |
+          cd work
+          time timeout 180 cline -m "${{ inputs.model }}" \
+            --thinking none --compaction off -c . \
+            -s "你是数据提取器。直接读图输出,禁止使用工具做二次验证,不要写文件" \
+            "读取当前目录下 t1.jpg 图片,逐行提取图中全部文字行,每行原样输出到JSON数组。只输出JSON。"
