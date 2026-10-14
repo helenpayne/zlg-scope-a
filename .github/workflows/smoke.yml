@@ -1,12 +1,7 @@
 name: smoke-test
 on:
-  push:
-    paths: ['.github/workflows/smoke.yml', 'work/t1.url.txt']
   workflow_dispatch:
     inputs:
-      img_url:
-        description: 'test image url'
-        required: true
       model:
         description: 'cline model'
         required: false
@@ -16,29 +11,21 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
       - name: env probe
         run: |
           echo "ip: $(curl -s ifconfig.me || echo n/a)"
           node --version; npm --version; python3 --version
 
-      - name: download test image
+      - name: fetch image via panel api
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
-          URL="${{ inputs.img_url }}"
-          [ -z "$URL" ] && URL=$(head -1 work/t1.url.txt 2>/dev/null || true)
-          echo "::add-mask::$URL"
           mkdir -p work
-          echo "--- 裸curl ---"
-          curl -s -o /dev/null -w "code=%{http_code} ip=%{remote_ip} time=%{time_total}\n" --max-time 30 "$URL" || echo "curl failed rc=$?"
-          echo "--- 带UA+Referer ---"
-          curl -s -o /dev/null -w "code=%{http_code} time=%{time_total}\n" --max-time 30 \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
-            -e "https://www.zlg3d.com/" "$URL" || echo "curl failed rc=$?"
-          echo "--- DNS ---"
-          getent hosts cdn.wangwang.life | head -3
-          curl -fsSL -o work/t1.jpg --max-time 60 \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
-            -e "https://www.zlg3d.com/" "$URL" && ls -la work/
+          SHA=b9267b8e6c40d90bcea99aae7421341f370d20daeaae1232c4c5181ffca37fe1
+          time curl -fsSL -o work/t1.jpg \
+            -H "X-GA-Token: $API_TOKEN" "$API_BASE/api/ga/img/$SHA"
+          file work/t1.jpg; ls -la work/
 
       - name: install cline
         run: npm install -g cline 2>&1 | tail -3
