@@ -16,15 +16,30 @@ jobs:
           echo "ip: $(curl -s ifconfig.me || echo n/a)"
           node --version; npm --version; python3 --version
 
-      - name: fetch image via panel api
+      - name: fetch image (CDN direct -> api fallback)
         env:
           API_BASE: ${{ secrets.API_BASE }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
           mkdir -p work
           SHA=b9267b8e6c40d90bcea99aae7421341f370d20daeaae1232c4c5181ffca37fe1
-          time curl -fsSL -o work/t1.jpg \
-            -H "X-GA-Token: $API_TOKEN" "$API_BASE/api/ga/img/$SHA"
+          CDNURL="https://cdn.wangwang.life/uploads/user/20261014/20261014184639ae5077750_img.png"
+          echo "=== A. CDN裸连 ==="
+          curl -s -o work/t1.jpg -w "cdn-direct code=%{http_code} t=%{time_total}\n" \
+            --connect-timeout 8 --max-time 20 "$CDNURL" || echo "cdn-direct FAIL rc=$?"
+          if ! file work/t1.jpg 2>/dev/null | grep -qi image; then
+            echo "=== B. CDN+UA/Referer ==="
+            curl -s -o work/t1.jpg -w "cdn-hdr code=%{http_code} t=%{time_total}\n" \
+              --connect-timeout 8 --max-time 20 \
+              -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36" \
+              -e "https://wangwang.life/" "$CDNURL" || echo "cdn-hdr FAIL rc=$?"
+          fi
+          if ! file work/t1.jpg 2>/dev/null | grep -qi image; then
+            echo "=== C. API代理回源 ==="
+            curl -fsSL -o work/t1.jpg -H "X-GA-Token: $API_TOKEN" \
+              --connect-timeout 8 --max-time 40 "$API_BASE/api/ga/img/$SHA" \
+              && echo "api-proxy OK"
+          fi
           file work/t1.jpg; ls -la work/
 
       - name: install cline
