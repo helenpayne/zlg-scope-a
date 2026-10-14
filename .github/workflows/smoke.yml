@@ -42,8 +42,14 @@ jobs:
           fi
           file work/t1.jpg; ls -la work/
 
-      - name: install cline
-        run: npm install -g cline 2>&1 | tail -3
+      - name: install cline + inject creds
+        env:
+          CLINE_PROVIDERS_JSON: ${{ secrets.CLINE_PROVIDERS_JSON }}
+        run: |
+          npm install -g cline 2>&1 | tail -3
+          mkdir -p ~/.cline/data/settings
+          printf '%s' "$CLINE_PROVIDERS_JSON" > ~/.cline/data/settings/providers.json
+          python3 -c "import json; d=json.load(open('$HOME/.cline/data/settings/providers.json')); print('cred ok:', bool(d['providers']['cline']['settings']['auth'].get('refreshToken')))"
 
       - name: vision extract
         env:
