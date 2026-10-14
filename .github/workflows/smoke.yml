@@ -1,4 +1,4 @@
-name: smoke
+name: smoke-test
 on:
   push:
     paths: ['.github/workflows/smoke.yml', 'work/t1.url.txt']
