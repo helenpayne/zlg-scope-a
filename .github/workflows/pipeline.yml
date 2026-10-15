@@ -11,9 +11,9 @@ on:
         required: false
         default: '0'
       shards:
-        description: '分片数'
+        description: '分片数(0=按待处理量自动)'
         required: false
-        default: '8'
+        default: '0'
       max_per_shard:
         description: '每分片最多处理图数(0=不限)'
         required: false
@@ -35,11 +35,28 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       shards: ${{ steps.gen.outputs.shards }}
-    env:
-      N: ${{ inputs.shards || '8' }}
+      n: ${{ steps.gen.outputs.n }}
     steps:
       - id: gen
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          ISSUE: ${{ inputs.issue || '' }}
+          AID: ${{ inputs.aid || '0' }}
+          FORCE: ${{ inputs.shards || '0' }}
+          PER_SHARD: '40'
+          MAX_SHARDS: '16'
         run: |
+          N="$FORCE"
+          if [ "$N" = "0" ]; then
+            P=$(curl -fsS -H "X-GA-Token: $API_TOKEN" \
+                 "$API_BASE/api/ga/pending?issue=$ISSUE&aid=$AID" \
+                 | python3 -c "import sys,json;print(json.load(sys.stdin)['pending'])" \
+                 || echo 0)
+            N=$(python3 -c "import math;p=int('$P');print(max(1,min($MAX_SHARDS,math.ceil(p/$PER_SHARD))))")
+            echo "pending=$P -> shards=$N"
+          fi
+          echo "n=$N" >> "$GITHUB_OUTPUT"
           echo "shards=$(seq 0 $((N-1)) | jq -c -R 'tonumber' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   work:
@@ -53,9 +70,10 @@ jobs:
     env:
       ISSUE: ${{ inputs.issue || '' }}
       AID: ${{ inputs.aid || '0' }}
-      N: ${{ inputs.shards || '8' }}
+      N: ${{ needs.prepare.outputs.n }}
       MAXN: ${{ inputs.max_per_shard || '0' }}
       ALL: ${{ inputs.all || '0' }}
+      BUDGET_SEC: '1500'
     steps:
       - uses: actions/checkout@v4
       - name: setup

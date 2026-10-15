@@ -12,6 +12,7 @@ from pathlib import Path
 API = os.environ["API_BASE"].rstrip("/")
 TOK = os.environ["API_TOKEN"]
 MAXN = int(os.environ.get("MAXN") or "0")
+BUDGET = int(os.environ.get("BUDGET_SEC") or "1500")   # 提前退出, 未处理图留待下轮
 MODELS = [
     "opencode/mimo-v2.6-flash-free",
     "opencode/longcat-2.5-preview-free",
@@ -26,8 +27,9 @@ if MAXN:
     items = items[:MAXN]
 work = Path("work")
 work.mkdir(exist_ok=True)
-report = {"total": len(items), "ok": 0, "vision_fail": 0, "dl_fail": 0,
-          "via": {"cdn": 0, "api": 0}, "per_img": []}
+report = {"total": len(items), "processed": 0, "ok": 0, "vision_fail": 0,
+          "dl_fail": 0, "via": {"cdn": 0, "api": 0}, "per_img": []}
+t_start = time.time()
 
 
 def fetch_img(it, dest):
@@ -84,6 +86,11 @@ def post(item, lines, model, via):
 
 
 for idx, it in enumerate(items):
+    if time.time() - t_start > BUDGET:
+        print(f"budget {BUDGET}s reached at {idx}/{len(items)}; "
+              f"{len(items)-idx} left -> re-queued next run", flush=True)
+        break
+    report["processed"] = idx + 1
     t0 = time.time()
     sha = it.get("sha256", "")
     raw = work / f"{sha[:10]}.jpg"
