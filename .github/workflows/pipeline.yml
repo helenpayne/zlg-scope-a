@@ -4,7 +4,12 @@ on:
     inputs:
       issue:
         description: '期号, 如 273 或 2026273'
-        required: true
+        required: false
+        default: ''
+      aid:
+        description: '文章ID(优先级高于issue, 用于精确锁定综合参考区文章)'
+        required: false
+        default: '0'
       shards:
         description: '分片数'
         required: false
@@ -51,7 +56,7 @@ jobs:
         run: |
           SHARD="${{ matrix.shard }}/${{ inputs.shards }}"
           curl -fsSL -H "X-GA-Token: $API_TOKEN" \
-            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&shard=$SHARD&limit=500&all=${{ inputs.all }}" \
+            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&aid=${{ inputs.aid }}&shard=$SHARD&limit=500&all=${{ inputs.all }}" \
             -o manifest.json
           python3 -c "import json; d=json.load(open('manifest.json')); print('shard',d['shard'],'items',d['count'])"
 
