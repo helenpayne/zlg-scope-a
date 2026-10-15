@@ -41,7 +41,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: setup
         run: |
-          python3 -m pip install --quiet pillow 2>&1 | tail -1
           npm install -g opencode-ai 2>&1 | tail -1
           node --version; opencode --version 2>&1 | head -1
 

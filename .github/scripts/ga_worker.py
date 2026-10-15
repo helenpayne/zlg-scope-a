@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""GA worker: manifest.json -> 逐图下载(CDN直连->API代理兜底) -> 裁底50%
+"""GA worker: manifest.json -> 逐图下载(CDN直连->API代理兜底) -> 全图
 -> opencode vision 提取文字行 -> POST /api/ga/result 回传。
 逐张回传保证断点不丢; 模型轮询分摊配额。"""
 import json
@@ -8,8 +8,6 @@ import subprocess
 import time
 import urllib.request
 from pathlib import Path
-
-from PIL import Image
 
 API = os.environ["API_BASE"].rstrip("/")
 TOK = os.environ["API_TOKEN"]
@@ -89,22 +87,13 @@ for idx, it in enumerate(items):
     t0 = time.time()
     sha = it.get("sha256", "")
     raw = work / f"{sha[:10]}.jpg"
-    crop = work / f"{sha[:10]}_b.jpg"
     try:
         via = fetch_img(it, raw)
     except Exception as e:
         report["dl_fail"] += 1
         report["per_img"].append({"sha": sha[:10], "err": f"dl:{e}"})
         continue
-    try:
-        im = Image.open(raw)
-        w, h = im.size
-        im.crop((0, h // 2, w, h)).save(crop, quality=88)
-    except Exception as e:
-        report["dl_fail"] += 1
-        report["per_img"].append({"sha": sha[:10], "err": f"img:{e}"})
-        continue
-    lines, model = vision(crop)
+    lines, model = vision(raw)
     if not lines:
         report["vision_fail"] += 1
         report["per_img"].append({"sha": sha[:10], "err": "vision"})
