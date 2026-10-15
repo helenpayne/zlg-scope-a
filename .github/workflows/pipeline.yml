@@ -22,16 +22,24 @@ on:
         description: '1=忽略已处理状态(演练/重跑)'
         required: false
         default: '0'
+  schedule:
+    # 自动消化待 OCR 追加图: 北京 12:00-23:50 (UTC 04:00-15:50), 每10分钟
+    - cron: '*/10 4-15 * * *'
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
 
 jobs:
   prepare:
     runs-on: ubuntu-latest
     outputs:
       shards: ${{ steps.gen.outputs.shards }}
+    env:
+      N: ${{ inputs.shards || '8' }}
     steps:
       - id: gen
         run: |
-          N=${{ inputs.shards }}
           echo "shards=$(seq 0 $((N-1)) | jq -c -R 'tonumber' | jq -sc .)" >> "$GITHUB_OUTPUT"
 
   work:
@@ -42,6 +50,12 @@ jobs:
       fail-fast: false
       matrix:
         shard: ${{ fromJSON(needs.prepare.outputs.shards) }}
+    env:
+      ISSUE: ${{ inputs.issue || '' }}
+      AID: ${{ inputs.aid || '0' }}
+      N: ${{ inputs.shards || '8' }}
+      MAXN: ${{ inputs.max_per_shard || '0' }}
+      ALL: ${{ inputs.all || '0' }}
     steps:
       - uses: actions/checkout@v4
       - name: setup
@@ -54,9 +68,9 @@ jobs:
           API_BASE: ${{ secrets.API_BASE }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
-          SHARD="${{ matrix.shard }}/${{ inputs.shards }}"
+          SHARD="${{ matrix.shard }}/$N"
           curl -fsSL -H "X-GA-Token: $API_TOKEN" \
-            "$API_BASE/api/ga/tasks?issue=${{ inputs.issue }}&aid=${{ inputs.aid }}&shard=$SHARD&limit=500&all=${{ inputs.all }}" \
+            "$API_BASE/api/ga/tasks?issue=$ISSUE&aid=$AID&shard=$SHARD&limit=500&all=$ALL" \
             -o manifest.json
           python3 -c "import json; d=json.load(open('manifest.json')); print('shard',d['shard'],'items',d['count'])"
 
@@ -64,7 +78,6 @@ jobs:
         env:
           API_BASE: ${{ secrets.API_BASE }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
-          MAXN: ${{ inputs.max_per_shard }}
         run: |
           python3 .github/scripts/ga_worker.py
 
