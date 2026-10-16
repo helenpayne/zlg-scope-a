@@ -60,6 +60,7 @@ PROMPT = (
     "『和值14/跨度5』、『6码复式235679/八码复式…』『位选0156/04568』等整段复式; "
     "即使其中出现三位数字(如三胆159)也不算直选注。号码只是往期开奖记录同样判垃圾。\n"
     "另请识别图片的**作者/品牌标识名**(指海报**大标题/栏目/byline**, 如『飞龙在天』『孤舟』『双龙汇』『摇钱树』; "
+    "图中若出现『色彩吧』等栏目标签, 请务必一并提取与其**同现的作者名**(即使整图内容是往期号码表); "
     "**忽略角落/边缘的固定平台水印**(如『臻料阁』等带'料阁/料图'的粉色标识), 那是平台不是作者; "
     "看不清或不明显则填空串)。\n"
     "若为 3D直选/P3直选/色彩吧, 在 content 字段**原样提取**图中号码/内容"
@@ -82,6 +83,18 @@ def load_junk_authors():
     return s
 
 
+def load_whitelist():
+    """作者白名单: experiments/author_whitelist*.txt。
+    与『色彩吧』同图出现的作者即认定为色彩吧作者, 永不计入/不命中垃圾作者库。"""
+    s = set()
+    for f in glob.glob("experiments/author_whitelist*.txt"):
+        try:
+            s |= {x.strip() for x in open(f, encoding="utf-8").read().splitlines() if x.strip()}
+        except Exception:
+            pass
+    return s
+
+
 # 平台水印(非作者): 含这些子串的名称一律忽略(不算作者, 不入库, 不命中)
 WATERMARK_HINTS = ("料阁", "料閣", "料图", "料図", "臻料")
 # 类别词/非人名: 与 kind 同名或明显不是作者的, 也忽略
@@ -93,7 +106,8 @@ def is_non_author(name):
     return n in NON_AUTHOR or any(w in n for w in WATERMARK_HINTS)
 
 
-JUNK_AUTHORS = {a for a in load_junk_authors() if not is_non_author(a)}
+WHITELIST = load_whitelist() | {"色彩吧"}
+JUNK_AUTHORS = {a for a in load_junk_authors() if not is_non_author(a) and a not in WHITELIST}
 
 
 def ts_of(url):
@@ -253,7 +267,8 @@ def work(item):
     kind = res.get("kind", "?")
     author = " ".join(str(res.get("author") or "").split())[:40]
     row["author"] = author
-    hit = bool(author) and author in JUNK_AUTHORS and not is_non_author(author)   # 命中垃圾作者库 -> 直接判垃圾
+    hit = (bool(author) and author in JUNK_AUTHORS
+           and author not in WHITELIST and not is_non_author(author))   # 命中垃圾作者库 -> 直接判垃圾(白名单除外)
     if hit:
         kind = "垃圾"
     row["kind"] = kind
