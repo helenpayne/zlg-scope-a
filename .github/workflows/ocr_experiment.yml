@@ -137,8 +137,23 @@ jobs:
                   skip.add(k)
           with open(f"experiments/{aid}.skip", "w", encoding="utf-8") as fh:
               fh.write("\n".join(sorted(skip)) + ("\n" if skip else ""))
+          # 作者白名单: 与『色彩吧』同图共现的作者 + 『色彩吧』本身
+          # (他们是色彩吧栏目作者, 永不计入/不命中垃圾作者库)
+          whitelist = {"色彩吧"}
+          for f in glob.glob("experiments/author_whitelist*.txt"):
+              for x in open(f, encoding="utf-8").read().splitlines():
+                  if x.strip(): whitelist.add(x.strip())
+          def has_scb(r):
+              return "色彩吧" in ((r.get("reason") or "") + " " + (r.get("content") or ""))
+          wl_added = set()
+          for r in out:
+              a = (r.get("author") or "").strip()
+              if a and has_scb(r) and a not in whitelist:
+                  whitelist.add(a); wl_added.add(a)
+          with open("experiments/author_whitelist.txt", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(sorted(whitelist)) + "\n")
           # 维护全局"垃圾作者库": 凡是判为垃圾的行, 其 author 计入 experiments/junk_authors.txt
-          # (过滤平台水印"料阁/料图/臻料"及类别词"色彩吧/3D直选"等, 避免把公共水印/类别当作者)
+          # (过滤平台水印"料阁/料图/臻料"、类别词"色彩吧/3D直选"及白名单作者)
           WM = ("料阁", "料閣", "料图", "料図", "臻料")
           NON_AUTHOR = {"色彩吧", "3D直选", "P3直选", "垃圾", "3D", "P3", "直选"}
           def is_wm(n):
@@ -148,12 +163,12 @@ jobs:
           for f in glob.glob("experiments/junk_authors*.txt"):
               for x in open(f, encoding="utf-8").read().splitlines():
                   x = x.strip()
-                  if x and not is_wm(x):
+                  if x and not is_wm(x) and x not in whitelist:
                       authors.add(x)
           added = set()
           for r in out:
               a = (r.get("author") or "").strip()
-              if r.get("kind") == "垃圾" and a and not is_wm(a) and a not in authors:
+              if r.get("kind") == "垃圾" and a and not is_wm(a) and a not in whitelist and a not in authors:
                   authors.add(a); added.add(a)
           with open("experiments/junk_authors.txt", "w", encoding="utf-8") as fh:
               fh.write("\n".join(sorted(authors)) + ("\n" if authors else ""))
@@ -161,6 +176,7 @@ jobs:
           for r in out: k[r["kind"]] += 1
           print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}")
           print(f"垃圾作者库: 共 {len(authors)} 个(本次新增 {sorted(added)})")
+          print(f"作者白名单: 共 {len(whitelist)} 个(本次新增 {sorted(wl_added)})")
           PY
       - name: commit
         run: |
