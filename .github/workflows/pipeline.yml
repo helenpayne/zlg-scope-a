@@ -85,7 +85,6 @@ jobs:
         run: |
           npm install -g opencode-ai 2>&1 | tail -1
           node --version; opencode --version 2>&1 | head -1
-          pip install -q rapidocr_onnxruntime 2>&1 | tail -2
 
       - name: pull manifest
         env:
