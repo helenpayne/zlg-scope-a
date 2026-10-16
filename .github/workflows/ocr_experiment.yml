@@ -1,6 +1,7 @@
-name: ocr-experiment
+name: vision-experiment
 
-# 一次性实验: 5 个 runner 并行, 各拉一段"追加料图"URL -> 下载 -> RapidOCR -> LLM判垃圾 -> CSV 入库
+# 实验: 5 个 runner 并行, 各拉一段"追加料图"URL -> 下载 -> 图片直接交大模型判 直选/色彩吧/垃圾 -> CSV
+# (不再使用 OCR; runner 内 VISION_CONCURRENCY 个 opencode 窗口并行)
 on:
   workflow_dispatch:
     inputs:
@@ -16,9 +17,12 @@ on:
       shards:
         description: 并行 runner 数
         default: '5'
-      llm_model:
-        description: 判定用大模型
-        default: opencode/space-bunny-free
+      vision_concurrency:
+        description: 每个runner内 opencode 并行窗口数
+        default: '5'
+      vision_models:
+        description: 模型(逗号分隔, 前为主后为备用)
+        default: 'opencode/space-bunny-free,opencode/mimo-v2.6-flash-free'
 
 permissions:
   contents: write
@@ -53,7 +57,8 @@ jobs:
       END: ${{ inputs.end }}
       SHARD: ${{ matrix.shard }}
       SHARDS: ${{ inputs.shards }}
-      LLM_MODEL: ${{ inputs.llm_model }}
+      VISION_CONCURRENCY: ${{ inputs.vision_concurrency }}
+      VISION_MODELS: ${{ inputs.vision_models }}
       OUT_DIR: out
     steps:
       - uses: actions/checkout@v4
@@ -62,11 +67,10 @@ jobs:
           python-version: '3.11'
       - name: deps
         run: |
-          pip install -q rapidocr_onnxruntime 2>&1 | tail -2
           npm install -g opencode-ai 2>&1 | tail -1
           opencode --version 2>&1 | head -1
       - name: run shard
-        run: python .github/scripts/ocr_shard.py
+        run: python .github/scripts/vision_shard.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -101,7 +105,7 @@ jobs:
               with open(f, newline="", encoding="utf-8") as fh:
                   rows += list(csv.DictReader(fh))
           rows.sort(key=lambda r: int(r["idx"]))
-          out = f"experiments/ocr_{os.environ['AID']}_{os.environ['START']}_{os.environ['END']}.csv"
+          out = f"experiments/vision_{os.environ['AID']}_{os.environ['START']}_{os.environ['END']}.csv"
           with open(out, "w", newline="", encoding="utf-8") as fh:
               w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
               w.writeheader(); w.writerows(rows)
@@ -115,5 +119,5 @@ jobs:
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add -A experiments
-          git commit -m "ocr experiment ${{ inputs.aid }} ${{ inputs.start }}-${{ inputs.end }}" || echo "no change"
+          git commit -m "vision experiment ${{ inputs.aid }} ${{ inputs.start }}-${{ inputs.end }}" || echo "no change"
           git push || echo "push failed"
