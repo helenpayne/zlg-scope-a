@@ -10,6 +10,7 @@ import csv
 import glob
 import json
 import os
+import re
 import subprocess
 import time
 import urllib.request
@@ -35,21 +36,29 @@ DL_TIMEOUT = 15
 DL_RETRY = 3
 
 # CSV 数据库列(顺序固定; 空结果也按此写表头)
-FIELDS = ["idx", "sha256", "url", "name", "kind", "junk", "reason",
-          "model", "sec", "status"]
+FIELDS = ["idx", "sha256", "url", "name", "kind", "junk", "content",
+          "reason", "model", "sec", "status"]
 
 PROMPT = (
-    "这是彩票预测图片。请根据图片内容判断类型:\n"
-    "【直选】福彩3D 的三位数(000-999)号码组合列表/号码池: 三位数一组, 用空格/逗号/连字符分隔, "
-    "常见于 组选/组三/组六/小底/大底/直选注/精选/单挑/直组 等号码池。\n"
+    "这是彩票预测图片。请判断类别并提取内容。\n"
+    "【3D直选】福彩3D 的三位数(000-999)号码池: 号码每三个数一组, 用空格/逗号/连字符分隔, "
+    "常见于 组选/组三/组六/小底/大底/精选/单挑/直组。\n"
+    "【P3直选】排列三(排3/P3) 的三位数号码池(形式同上)。\n"
     "【色彩吧】含色彩吧色彩号码内容。\n"
-    "【垃圾】其它, 例如:\n"
-    "  - 非福彩3D彩种: 快乐8(号码01-80两位数)、双色球(红蓝球)、大乐透、七星彩 等\n"
-    "  - 开奖结果(福开/体开/第x期开奖号)、复式码(九码/八码/七码复式)\n"
-    "  - 胆码/断组/分解/和值/跨度/漏号/定位/双飞 等非号码池内容、纯文字营销/无关内容\n"
-    '只输出一行JSON, 不要解释: {"kind":"直选|色彩吧|垃圾","junk":true/false,"reason":"简短"}'
+    "【垃圾】其它, 例如: 快乐8(号码01-80两位数)、双色球、大乐透、七星彩 等非3D/P3彩种; "
+    "开奖结果(福开/体开/第x期开奖号); 复式码(九码/八码/七码复式); "
+    "胆码/断组/分解/和值/跨度/漏号/定位/双飞 等非号码池内容; 纯文字营销/无关内容。\n"
+    "若为 3D直选/P3直选/色彩吧, 在 content 字段**原样提取**图中号码/内容"
+    "(号码池逐组列出, 空格分隔; 色彩吧列出其号码); 垃圾则 content 留空。\n"
+    '只输出一行JSON, 不要解释: '
+    '{"kind":"3D直选|P3直选|色彩吧|垃圾","junk":true/false,"content":"...","reason":"简短"}'
 )
-CATEGORIES = {"直选", "色彩吧", "垃圾"}
+CATEGORIES = {"3D直选", "P3直选", "色彩吧", "垃圾"}
+
+
+def ts_of(url):
+    m = re.search(r"/(\d{14})", url or "")
+    return m.group(1) if m else ""
 
 
 def load_known(aid):
@@ -64,6 +73,17 @@ def load_known(aid):
         except Exception:
             pass
     return known
+
+
+def load_skip_ts(aid):
+    """读取"整批垃圾"的来源批次(URL上传秒)黑名单, 命中则整批跳过(不下载/不调模型)。"""
+    out = set()
+    for f in glob.glob(f"experiments/{aid}.skip*"):
+        try:
+            out |= {x.strip() for x in open(f, encoding="utf-8").read().split() if x.strip()}
+        except Exception:
+            pass
+    return out
 
 
 def api_get(path):
@@ -113,18 +133,20 @@ def ext_of(url, data):
 
 
 def parse(out):
-    for line in (out or "").splitlines():
-        line = line.strip()
-        if line.startswith("{"):
+    """从模型输出里找 JSON(容忍前后有其它文字)。"""
+    out = out or ""
+    for line in out.splitlines():
+        i, j = line.find("{"), line.rfind("}")
+        if i >= 0 and j > i:
             try:
-                j = json.loads(line)
-                if j.get("kind") in CATEGORIES:
-                    return j
+                k = json.loads(line[i:j + 1])
+                if k.get("kind") in CATEGORIES:
+                    return k
             except Exception:
                 pass
-    for k in CATEGORIES:
-        if k in (out or ""):
-            return {"kind": k, "junk": k == "垃圾", "reason": "fallback"}
+    for k in ("3D直选", "P3直选", "色彩吧", "垃圾"):
+        if k in out:
+            return {"kind": k, "junk": k == "垃圾", "content": "", "reason": "fallback"}
     return None
 
 
@@ -150,7 +172,8 @@ def classify(img_path):
 def work(item):
     idx, sha, url = item["idx"], item["sha256"], item["url"]
     row = {"idx": idx, "sha256": sha, "url": url, "name": safe_name(idx, sha, url),
-           "kind": "?", "junk": "", "reason": "", "model": "", "sec": "", "status": "ok"}
+           "kind": "?", "junk": "", "content": "", "reason": "", "model": "",
+           "sec": "", "status": "ok"}
     t0 = time.time()
     try:
         data = fetch_bytes(url, sha)
@@ -162,9 +185,11 @@ def work(item):
     img.write_bytes(data)
     res, model = classify(img)
     row["sec"] = round(time.time() - t0, 1)
-    row["kind"] = res.get("kind", "?")
-    row["junk"] = ("true" if res.get("kind") == "垃圾" else
-                   ("false" if res.get("kind") in CATEGORIES else ""))
+    kind = res.get("kind", "?")
+    row["kind"] = kind
+    row["junk"] = ("true" if kind == "垃圾" else
+                   ("false" if kind in CATEGORIES else ""))
+    row["content"] = (" ".join(str(res.get("content") or "").split()))[:800]
     row["reason"] = (res.get("reason") or "")[:80]
     row["model"] = model.split("/")[-1] if model != "-" else "-"
     return row
@@ -184,15 +209,23 @@ def main():
           f"models={MODELS} conc={CONC} force={FORCE}", flush=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     known = set() if FORCE else load_known(AID)
-    todo = [it for it in items if it["sha256"] not in known]
-    print(f"shard {SHARD}: 跳过已判 {len(items)-len(todo)} 张, 待处理 {len(todo)} 张",
-          flush=True)
+    skip_ts = set() if FORCE else load_skip_ts(AID)
+    todo, n_known, n_batch = [], 0, 0
+    for it in items:
+        if it["sha256"] in known:
+            n_known += 1
+        elif ts_of(it.get("url")) in skip_ts and skip_ts:
+            n_batch += 1        # 整批垃圾来源, 直接跳过(不下载/不调模型)
+        else:
+            todo.append(it)
+    print(f"shard {SHARD}: 跳过已判 {n_known} 张, 跳过整批垃圾 {n_batch} 张, "
+          f"待处理 {len(todo)} 张", flush=True)
     t0 = time.time()
     rows = []
     with ThreadPoolExecutor(max_workers=CONC) as ex:
         for row in ex.map(work, todo):
             rows.append(row)
-            print(f"  [{row['idx']}] {row['kind']:4s} junk={row['junk']:5s} "
+            print(f"  [{row['idx']}] {row['kind']:5s} junk={row['junk']:5s} "
                   f"model={row['model']:22s} {row['sec']}s", flush=True)
     rows.sort(key=lambda r: r["idx"])
     csv_path = OUT_DIR / f"shard_{SHARD}.csv"

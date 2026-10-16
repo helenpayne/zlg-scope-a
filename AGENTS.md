@@ -64,7 +64,8 @@ experiments/
 
 - **CSV 即数据库**：`experiments/vision_<aid>.csv` 持久保存该文章全部分类结果，**只追加/更新、从不删除**。`combine` 会先并入所有 `vision_<aid>*.csv`（含历史区间文件）再叠加本次结果，按 `sha256` 去重、按 `idx` 排序。
 - **跳过已判（增量）**：worker 开始前读取上述 CSV 的 `sha256` 集合，**已在库中的图片直接跳过（不下载、不调用模型）**。只处理新增图片——这正是"追加更新"的含义。
-- **`force=1`**：忽略数据库、全部重跑（调试用）。
+- **整批垃圾来源跳过**：`experiments/<aid>.skip` 记录"同一上传秒(URL 里 14 位 ts)内 >=2 张且全为垃圾"的来源；命中该 ts 的图片**直接跳过（不下载、不调用模型）**。用于拦掉快乐8等整批垃圾海报。
+- **`force=1`**：忽略数据库与跳过表、全部重跑（调试用）。
 - **图片按文章分目录**：`experiments/images/<aid>/`；每次运行**先清空该目录再放入本次下载的图片**，避免仓库无限膨胀。历史扁平图片（`experiments/images/*.jpg`）为旧版遗留，未清理。
 - **扩展性**：一切以 `aid` 为键。后续处理其它文章的图片时，复用同一工作流（传不同 `aid`）或另建工作流即可，互不干扰。
 
@@ -82,7 +83,7 @@ experiments/
 | `GET /api/ga/stats?issue=&aid=` | 按 ocr_status 统计 |
 
 字段/状态：`fact_image.ocr_status`：`0=pending 1=done 2=failed 9=skipped`；`kind='append'` 为"追加料图"。
-分类结果 `kind`：`直选` / `色彩吧` / `垃圾`（`junk=true`）。
+实验分类结果 `kind`：`3D直选` / `P3直选` / `色彩吧` / `垃圾`（`junk=true`）；非垃圾行在 `content` 列存大模型**原样提取**的号码/内容。
 
 ---
 
