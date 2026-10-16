@@ -42,7 +42,7 @@ DL_RETRY = 3
 
 # CSV 数据库列(顺序固定; 空结果也按此写表头)
 FIELDS = ["idx", "sha256", "url", "name", "kind", "junk", "content",
-          "reason", "votes", "model", "sec", "status"]
+          "author", "reason", "votes", "model", "sec", "status"]
 
 PROMPT = (
     "背景: 这些是『福彩3D 资料图(综合参考区)』里的图片, 均属福彩3D 相关参考资料"
@@ -59,12 +59,29 @@ PROMPT = (
     "以下**不算直选, 判垃圾**: 『三胆159/双胆15/独胆5』等胆码、『百位0689 十位1458 个位1247』等定位范围、"
     "『和值14/跨度5』、『6码复式235679/八码复式…』『位选0156/04568』等整段复式; "
     "即使其中出现三位数字(如三胆159)也不算直选注。号码只是往期开奖记录同样判垃圾。\n"
+    "另请识别图片的**作者/品牌标识名**(海报醒目处的作者名/栏目名/店铺名, 如『飞龙在天』『孤舟』『摇钱树』; "
+    "看不清或不明显则填空串)。\n"
     "若为 3D直选/P3直选/色彩吧, 在 content 字段**原样提取**图中号码/内容"
     "(号码池逐组列出, 空格分隔; 色彩吧列出其号码); 垃圾则 content 留空。\n"
     '只输出一行JSON, 不要解释: '
-    '{"kind":"3D直选|P3直选|色彩吧|垃圾","junk":true/false,"content":"...","reason":"简短"}'
+    '{"kind":"3D直选|P3直选|色彩吧|垃圾","junk":true/false,"content":"...","author":"作者名或空","reason":"简短"}'
 )
 CATEGORIES = {"3D直选", "P3直选", "色彩吧", "垃圾"}
+
+
+def load_junk_authors():
+    """全局"垃圾作者库": experiments/junk_authors*.txt, 每行一个作者名。
+    命中即直接判垃圾(无需再纠结该图内容)。"""
+    s = set()
+    for f in glob.glob("experiments/junk_authors*.txt"):
+        try:
+            s |= {x.strip() for x in open(f, encoding="utf-8").read().splitlines() if x.strip()}
+        except Exception:
+            pass
+    return s
+
+
+JUNK_AUTHORS = load_junk_authors()
 
 
 def ts_of(url):
@@ -208,8 +225,8 @@ def classify(img_path):
 def work(item):
     idx, sha, url = item["idx"], item["sha256"], item["url"]
     row = {"idx": idx, "sha256": sha, "url": url, "name": safe_name(idx, sha, url),
-           "kind": "?", "junk": "", "content": "", "reason": "", "votes": "",
-           "model": "", "sec": "", "status": "ok"}
+           "kind": "?", "junk": "", "content": "", "author": "", "reason": "",
+           "votes": "", "model": "", "sec": "", "status": "ok"}
     t0 = time.time()
     try:
         data = fetch_bytes(url, sha)
@@ -222,11 +239,19 @@ def work(item):
     res, votes, model = classify(img)
     row["sec"] = round(time.time() - t0, 1)
     kind = res.get("kind", "?")
+    author = " ".join(str(res.get("author") or "").split())[:40]
+    row["author"] = author
+    hit = bool(author) and author in JUNK_AUTHORS     # 命中垃圾作者库 -> 直接判垃圾
+    if hit:
+        kind = "垃圾"
     row["kind"] = kind
     row["junk"] = ("true" if kind == "垃圾" else
                    ("false" if kind in CATEGORIES else ""))
-    row["content"] = (" ".join(str(res.get("content") or "").split()))[:800]
-    row["reason"] = (res.get("reason") or "")[:80]
+    row["content"] = "" if kind == "垃圾" else (" ".join(str(res.get("content") or "").split()))[:800]
+    reason = res.get("reason") or ""
+    if hit:
+        reason = f"作者库命中[{author}]: {reason}"
+    row["reason"] = reason[:80]
     row["votes"] = votes[:200]
     row["model"] = model.split("/")[-1] if model != "-" else "-"
     return row
@@ -263,7 +288,7 @@ def main():
         for row in ex.map(work, todo):
             rows.append(row)
             print(f"  [{row['idx']}] {row['kind']:5s} junk={row['junk']:5s} "
-                  f"model={row['model']:22s} {row['sec']}s "
+                  f"author={row['author'][:12]:12s} model={row['model']:22s} {row['sec']}s "
                   f"votes={row['votes']}", flush=True)
     rows.sort(key=lambda r: r["idx"])
     csv_path = OUT_DIR / f"shard_{SHARD}.csv"
