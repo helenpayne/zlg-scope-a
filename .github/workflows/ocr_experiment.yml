@@ -99,10 +99,14 @@ jobs:
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
         run: |
-          # 图片: 按文章子目录存放; 每次运行清掉该文章上期图片, 只留本次下载的
-          rm -rf "experiments/images/${AID}"
-          mkdir -p "experiments/images/${AID}"
-          cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
+          # 图片: 按文章子目录存放; 仅当本次确有新下载图时才清空重放, 避免空跑把已有图抹掉
+          if compgen -G "all/images/*" > /dev/null; then
+            rm -rf "experiments/images/${AID}"
+            mkdir -p "experiments/images/${AID}"
+            cp -n all/images/* "experiments/images/${AID}/"
+          else
+            echo "本次无新下载图片, 保留 experiments/images/${AID}/ 现有图片"
+          fi
           python3 - <<'PY'
           import csv, glob, os, re
           from collections import defaultdict
