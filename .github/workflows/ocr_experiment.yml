@@ -133,8 +133,6 @@ jobs:
           for r in out:
               if ts(r["url"]): grp[ts(r["url"])].append(r)
           skip = set()
-          for f in glob.glob(f"experiments/{aid}.skip*"):
-              skip |= {x.strip() for x in open(f, encoding="utf-8").read().split()}
           for k, v in grp.items():
               if len(v) >= 2 and all(x.get("kind") == "垃圾" for x in v):
                   skip.add(k)
