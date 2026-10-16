@@ -18,6 +18,10 @@ on:
         description: '每分片最多处理图数(0=不限)'
         required: false
         default: '0'
+      img_concurrency:
+        description: '单worker内并发的图数(默认3)'
+        required: false
+        default: '3'
       all:
         description: '1=忽略已处理状态(演练/重跑)'
         required: false
@@ -74,6 +78,7 @@ jobs:
       MAXN: ${{ inputs.max_per_shard || '0' }}
       ALL: ${{ inputs.all || '0' }}
       BUDGET_SEC: '1500'
+      IMG_CONCURRENCY: ${{ inputs.img_concurrency || '3' }}
     steps:
       - uses: actions/checkout@v4
       - name: setup
