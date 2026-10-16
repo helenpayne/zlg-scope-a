@@ -59,7 +59,8 @@ PROMPT = (
     "以下**不算直选, 判垃圾**: 『三胆159/双胆15/独胆5』等胆码、『百位0689 十位1458 个位1247』等定位范围、"
     "『和值14/跨度5』、『6码复式235679/八码复式…』『位选0156/04568』等整段复式; "
     "即使其中出现三位数字(如三胆159)也不算直选注。号码只是往期开奖记录同样判垃圾。\n"
-    "另请识别图片的**作者/品牌标识名**(海报醒目处的作者名/栏目名/店铺名, 如『飞龙在天』『孤舟』『摇钱树』; "
+    "另请识别图片的**作者/品牌标识名**(指海报**大标题/栏目/byline**, 如『飞龙在天』『孤舟』『双龙汇』『摇钱树』; "
+    "**忽略角落/边缘的固定平台水印**(如『臻料阁』等带'料阁/料图'的粉色标识), 那是平台不是作者; "
     "看不清或不明显则填空串)。\n"
     "若为 3D直选/P3直选/色彩吧, 在 content 字段**原样提取**图中号码/内容"
     "(号码池逐组列出, 空格分隔; 色彩吧列出其号码); 垃圾则 content 留空。\n"
@@ -81,7 +82,16 @@ def load_junk_authors():
     return s
 
 
-JUNK_AUTHORS = load_junk_authors()
+# 平台水印(非作者): 含这些子串的名称一律忽略(不算作者, 不入库, 不命中)
+WATERMARK_HINTS = ("料阁", "料閣", "料图", "料図", "臻料")
+
+
+def is_watermark(name):
+    n = (name or "").replace(" ", "")
+    return any(w in n for w in WATERMARK_HINTS)
+
+
+JUNK_AUTHORS = {a for a in load_junk_authors() if not is_watermark(a)}
 
 
 def ts_of(url):
@@ -241,7 +251,7 @@ def work(item):
     kind = res.get("kind", "?")
     author = " ".join(str(res.get("author") or "").split())[:40]
     row["author"] = author
-    hit = bool(author) and author in JUNK_AUTHORS     # 命中垃圾作者库 -> 直接判垃圾
+    hit = bool(author) and author in JUNK_AUTHORS and not is_watermark(author)   # 命中垃圾作者库 -> 直接判垃圾
     if hit:
         kind = "垃圾"
     row["kind"] = kind
