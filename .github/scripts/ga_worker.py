@@ -21,6 +21,9 @@ MODELS = [
     "opencode/mimo-v2.6-flash-free",
     "opencode/longcat-2.5-preview-free",
 ]
+# RapidOCR 快筛门控: 无任何信号词的图直接判垃圾, 不调用视觉大模型
+SIGNAL = ["直选", "单挑", "精选", "精挑", "直组", "单组",
+          "防守", "挑战", "惊天", "猛干", "色彩"]
 
 PROMPT = ("读取这张彩票预测图,逐行提取图中全部文字行,每行原样输出到JSON数组。"
           '输出格式:{"lines":["...","..."]}。只输出JSON,不要解释,不要使用工具。')
@@ -32,9 +35,26 @@ if MAXN:
 work = Path("work")
 work.mkdir(exist_ok=True)
 report = {"total": len(items), "processed": 0, "ok": 0, "vision_fail": 0,
-          "dl_fail": 0, "via": {"cdn": 0, "api": 0}, "per_img": []}
+          "dl_fail": 0, "rapid_skip": 0, "via": {"cdn": 0, "api": 0},
+          "per_img": []}
 t_start = time.time()
 _lock = threading.Lock()
+_ocr = None
+_ocr_lock = threading.Lock()
+
+
+def rapid_lines(p):
+    """本地 RapidOCR 快筛; 失败返回 None(退回视觉大模型)。"""
+    global _ocr
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        with _ocr_lock:
+            if _ocr is None:
+                _ocr = RapidOCR()
+        res, _ = _ocr(str(p))
+        return [r[1] for r in (res or [])]
+    except Exception:
+        return None
 
 
 def fetch_img(it, dest):
@@ -105,6 +125,17 @@ def handle(idx, it):
         with _lock:
             report["dl_fail"] += 1
             report["per_img"].append({"sha": sha[:10], "err": f"dl:{e}"})
+        return True
+    rl = rapid_lines(raw)
+    if rl is not None and not any(k in "".join(rl) for k in SIGNAL):
+        post(it, rl if rl else ["[空]"], "rapid", via)   # 垃圾快筛, 跳过视觉大模型
+        with _lock:
+            report["rapid_skip"] += 1
+            report["per_img"].append({"sha": sha[:10],
+                                      "t": round(time.time() - t0, 1),
+                                      "skip": 1, "chars": len("".join(rl))})
+        print(f"[{idx+1}] {sha[:10]} rapid-skip "
+              f"{time.time()-t0:.0f}s chars={len(''.join(rl))}", flush=True)
         return True
     lines, model = vision(raw)
     if not lines:
