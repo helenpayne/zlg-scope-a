@@ -99,14 +99,9 @@ jobs:
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
         run: |
-          # 图片: 按文章子目录存放; 仅当本次确有新下载图时才清空重放, 避免空跑把已有图抹掉
-          if compgen -G "all/images/*" > /dev/null; then
-            rm -rf "experiments/images/${AID}"
-            mkdir -p "experiments/images/${AID}"
-            cp -n all/images/* "experiments/images/${AID}/"
-          else
-            echo "本次无新下载图片, 保留 experiments/images/${AID}/ 现有图片"
-          fi
+          # 图片: 按文章子目录存放, 采用"合并"策略(不删除), 避免局部/空跑把范围外或已有图片抹掉
+          mkdir -p "experiments/images/${AID}"
+          cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
           python3 - <<'PY'
           import csv, glob, os, re
           from collections import defaultdict
