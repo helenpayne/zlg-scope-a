@@ -14,6 +14,7 @@ import re
 import subprocess
 import time
 import urllib.request
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -25,19 +26,23 @@ END = int(os.environ.get("END", "100"))
 SHARD = int(os.environ.get("SHARD", "0"))
 SHARDS = int(os.environ.get("SHARDS", "5"))
 OUT_DIR = Path(os.environ.get("OUT_DIR", "out"))
+# 每个元素 = 一票; 多票取多数(kind), 平票时列表靠后者优先(默认末位 mimo)。
+# 同一模型可重复出现以获得多票(降低单次非确定性)。
 MODELS = [m.strip() for m in os.environ.get(
     "VISION_MODELS",
-    "opencode/space-bunny-free,opencode/mimo-v2.6-flash-free").split(",") if m.strip()]
+    "opencode/space-bunny-free,opencode/space-bunny-free,opencode/mimo-v2.6-flash-free"
+).split(",") if m.strip()]
 CONC = int(os.environ.get("VISION_CONCURRENCY", "5"))
 FORCE = os.environ.get("FORCE", "0") == "1"
 OPENCODE_BIN = os.environ.get("OPENCODE_BIN", "opencode")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "240"))
+VOTE_RETRY = int(os.environ.get("VOTE_RETRY", "2"))
 DL_TIMEOUT = 15
 DL_RETRY = 3
 
 # CSV 数据库列(顺序固定; 空结果也按此写表头)
 FIELDS = ["idx", "sha256", "url", "name", "kind", "junk", "content",
-          "reason", "model", "sec", "status"]
+          "reason", "votes", "model", "sec", "status"]
 
 PROMPT = (
     "背景: 这些是『福彩3D 资料图(综合参考区)』里的图片, 均属福彩3D 相关参考资料"
@@ -151,30 +156,55 @@ def parse(out):
     return None
 
 
-def classify(img_path):
-    """依次尝试各模型, 返回 (结果dict, 命中的模型)。"""
-    last = "no model"
-    for m in MODELS:
+def one_call(img_path, model):
+    """单次调用; 失败/解析失败最多重试 VOTE_RETRY 次。返回结果dict或None。"""
+    for _ in range(VOTE_RETRY):
         try:
             r = subprocess.run(
-                [OPENCODE_BIN, "run", "-m", m, "-f", str(img_path),
+                [OPENCODE_BIN, "run", "-m", model, "-f", str(img_path),
                  "--title", "x", PROMPT],
                 capture_output=True, text=True, timeout=LLM_TIMEOUT)
             j = parse(r.stdout)
             if j:
-                return j, m
-            last = "parse fail"
-        except Exception as e:
-            last = str(e)
-        time.sleep(0.5)
-    return {"kind": "?", "junk": None, "reason": last[:80]}, "-"
+                return j
+        except Exception:
+            pass
+        time.sleep(0.3)
+    return None
+
+
+def classify(img_path):
+    """每个 MODELS 元素投一票, 对 kind 取多数(平票时列表靠后者优先)。
+    返回 (结果dict, votes摘要, 命中模型)。"""
+    results = [(m, one_call(img_path, m)) for m in MODELS]
+    valid = [(m, j) for m, j in results if j and j.get("kind") in CATEGORIES]
+    votes = "|".join(f"{m.split('/')[-1]}:{j['kind'] if j else 'X'}" for m, j in results)
+    if not valid:
+        return ({"kind": "?", "junk": None, "content": "", "reason": "all fail"},
+                votes, "-")
+    cnt = Counter(j["kind"] for _, j in valid)
+    best = max(cnt.values())
+    winners = [k for k, c in cnt.items() if c == best]
+    rank = {m: i for i, m in enumerate(MODELS)}
+    kind = winners[0]
+    if len(winners) > 1:                       # 平票: 列表靠后者(优先级高)决定
+        for m, j in reversed(valid):
+            if j["kind"] in winners:
+                kind = j["kind"]
+                break
+    cand = [(m, j) for m, j in valid if j["kind"] == kind] or valid
+    m, j = max(cand, key=lambda x: rank.get(x[0], -1))
+    j = dict(j)
+    j["kind"] = kind
+    j["junk"] = (kind == "垃圾")
+    return j, votes, m
 
 
 def work(item):
     idx, sha, url = item["idx"], item["sha256"], item["url"]
     row = {"idx": idx, "sha256": sha, "url": url, "name": safe_name(idx, sha, url),
-           "kind": "?", "junk": "", "content": "", "reason": "", "model": "",
-           "sec": "", "status": "ok"}
+           "kind": "?", "junk": "", "content": "", "reason": "", "votes": "",
+           "model": "", "sec": "", "status": "ok"}
     t0 = time.time()
     try:
         data = fetch_bytes(url, sha)
@@ -184,7 +214,7 @@ def work(item):
     (OUT_DIR / "images").mkdir(parents=True, exist_ok=True)
     img = OUT_DIR / "images" / (row["name"] + ext_of(url, data))
     img.write_bytes(data)
-    res, model = classify(img)
+    res, votes, model = classify(img)
     row["sec"] = round(time.time() - t0, 1)
     kind = res.get("kind", "?")
     row["kind"] = kind
@@ -192,6 +222,7 @@ def work(item):
                    ("false" if kind in CATEGORIES else ""))
     row["content"] = (" ".join(str(res.get("content") or "").split()))[:800]
     row["reason"] = (res.get("reason") or "")[:80]
+    row["votes"] = votes[:200]
     row["model"] = model.split("/")[-1] if model != "-" else "-"
     return row
 
@@ -227,7 +258,8 @@ def main():
         for row in ex.map(work, todo):
             rows.append(row)
             print(f"  [{row['idx']}] {row['kind']:5s} junk={row['junk']:5s} "
-                  f"model={row['model']:22s} {row['sec']}s", flush=True)
+                  f"model={row['model']:22s} {row['sec']}s "
+                  f"votes={row['votes']}", flush=True)
     rows.sort(key=lambda r: r["idx"])
     csv_path = OUT_DIR / f"shard_{SHARD}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
