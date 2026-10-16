@@ -23,6 +23,9 @@ on:
       vision_models:
         description: 模型(逗号分隔, 前为主后为备用)
         default: 'opencode/space-bunny-free,opencode/mimo-v2.6-flash-free'
+      force:
+        description: '1=忽略数据库全部重跑(调试); 0=只处理新图(默认)'
+        default: '0'
 
 permissions:
   contents: write
@@ -59,6 +62,7 @@ jobs:
       SHARDS: ${{ inputs.shards }}
       VISION_CONCURRENCY: ${{ inputs.vision_concurrency }}
       VISION_MODELS: ${{ inputs.vision_models }}
+      FORCE: ${{ inputs.force }}
       OUT_DIR: out
     steps:
       - uses: actions/checkout@v4
@@ -89,30 +93,44 @@ jobs:
         with:
           path: all
           merge-multiple: true
-      - name: merge csv (清空旧 csv, 保存图片)
+      - name: merge (子目录存图 + CSV 数据库追加)
         env:
           AID: ${{ inputs.aid }}
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
         run: |
-          mkdir -p experiments/images
-          rm -f experiments/*.csv
-          cp -n all/images/* experiments/images/ 2>/dev/null || true
+          # 图片: 按文章子目录存放; 每次运行清掉该文章上期图片, 只留本次下载的
+          rm -rf "experiments/images/${AID}"
+          mkdir -p "experiments/images/${AID}"
+          cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
           python3 - <<'PY'
           import csv, glob, os
-          rows = []
+          aid = os.environ["AID"]
+          db = f"experiments/vision_{aid}.csv"           # 该文章的持久数据库
+          rows = {}
+          # 1) 已有历史结果(含旧的按区间命名的文件)先并入, 保证不丢
+          for f in glob.glob(f"experiments/vision_{aid}*.csv"):
+              with open(f, newline="", encoding="utf-8") as fh:
+                  for r in csv.DictReader(fh):
+                      if r.get("sha256"):
+                          rows[r["sha256"]] = r
+          # 2) 本次新结果覆盖同名 sha
+          new = 0
           for f in sorted(glob.glob("all/shard_*.csv")):
               with open(f, newline="", encoding="utf-8") as fh:
-                  rows += list(csv.DictReader(fh))
-          rows.sort(key=lambda r: int(r["idx"]))
-          out = f"experiments/vision_{os.environ['AID']}_{os.environ['START']}_{os.environ['END']}.csv"
-          with open(out, "w", newline="", encoding="utf-8") as fh:
-              w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
-              w.writeheader(); w.writerows(rows)
-          j = sum(1 for r in rows if r["junk"] == "true")
-          print(f"{out}: {len(rows)} imgs, junk={j}, "
-                f"直选={sum(1 for r in rows if r['kind']=='直选')}, "
-                f"色彩吧={sum(1 for r in rows if r['kind']=='色彩吧')}")
+                  for r in csv.DictReader(fh):
+                      if r.get("sha256"):
+                          rows[r["sha256"]] = r
+                          new += 1
+          out = sorted(rows.values(), key=lambda r: int(r["idx"]))
+          if out:
+              with open(db, "w", newline="", encoding="utf-8") as fh:
+                  w = csv.DictWriter(fh, fieldnames=list(out[0].keys()))
+                  w.writeheader(); w.writerows(out)
+          k = {}
+          for r in out:
+              k[r["kind"]] = k.get(r["kind"], 0) + 1
+          print(f"{db}: 数据库共 {len(out)} 张 (本次新增 {new}), kind={k}")
           PY
       - name: commit
         run: |

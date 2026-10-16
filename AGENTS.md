@@ -35,7 +35,7 @@
 - **保持文件名稳定**：工作流的**文件名即分发 URL**。例如可视化实验工作流文件名仍是 `ocr_experiment.yml`（显示名为 vision-experiment），改名会破坏用户收藏的触发地址。
 - **预算/超时**：GitHub 单 job 上限见各工作流 `timeout-minutes`；`ga_worker.py` 用 `BUDGET_SEC`(默认 1500) 提前退出，**未处理的图留给下一轮，不要让它死等**。
 - **失败要回传**：模型彻底失败时调用 `/api/ga/result` 且 `failed=true`，让主仓累计 `ocr_attempt` 并在 3 次后封顶（避免毒丸图反复调度）。
-- **`experiments/` 是自动产物**：每次实验运行会**清空 `experiments/*.csv`** 并重写；图片按内容去重累积。**不要手工编辑这些文件**。
+- **`experiments/` 是自动产物**：`vision_<aid>.csv` 是持久数据库（只增不删），`images/<aid>/` 每次运行刷新。**不要手工编辑**这些文件（会干扰 sha 去重与增量跳过）。
 - **改动前先本地校验**，再 push：
   ```
   python3 -c "import ast; ast.parse(open('.github/scripts/xxx.py').read())"
@@ -55,9 +55,18 @@
   ga_worker.py          # pipeline 的 worker: 并发下载 + 视觉提字 + 回传
   vision_shard.py       # 实验的 worker: 下载 + 图片直判 直选/色彩吧/垃圾 + 汇总
 experiments/
-  images/               # 实验下载的图片(按 idx_ 前缀, 内容去重)
-  vision_<aid>_<s>_<e>.csv   # 每次实验的合并结果(每次运行重建)
+  vision_<aid>.csv      # 该文章分类**数据库**(持久; 只追加/更新, 不删除)
+  vision_<aid>_*.csv    # 早期按区间命名的结果(仍在, 会被一并读入作为历史)
+  images/<aid>/         # 该文章本次运行下载的图片(每次运行清上期, 只留本次)
 ```
+
+### 数据/图片存储与跳过机制（重要）
+
+- **CSV 即数据库**：`experiments/vision_<aid>.csv` 持久保存该文章全部分类结果，**只追加/更新、从不删除**。`combine` 会先并入所有 `vision_<aid>*.csv`（含历史区间文件）再叠加本次结果，按 `sha256` 去重、按 `idx` 排序。
+- **跳过已判（增量）**：worker 开始前读取上述 CSV 的 `sha256` 集合，**已在库中的图片直接跳过（不下载、不调用模型）**。只处理新增图片——这正是"追加更新"的含义。
+- **`force=1`**：忽略数据库、全部重跑（调试用）。
+- **图片按文章分目录**：`experiments/images/<aid>/`；每次运行**先清空该目录再放入本次下载的图片**，避免仓库无限膨胀。历史扁平图片（`experiments/images/*.jpg`）为旧版遗留，未清理。
+- **扩展性**：一切以 `aid` 为键。后续处理其它文章的图片时，复用同一工作流（传不同 `aid`）或另建工作流即可，互不干扰。
 
 ---
 
@@ -111,6 +120,7 @@ curl -X POST -H "Authorization: token $GH_TOKEN" -H "Accept: application/vnd.git
 ## 7. 注意事项 / 已知问题
 
 - **OCR 会丢分隔符**：RapidOCR 常把"026 568 569"连成"026568569…"，纯文本规则会误判复式/开奖串。这也是现方案改为**图片直交大模型（视觉）**的原因。
-- **分片实验图片文件名有双扩展名**（如 `0001_xxx_img.png.png`）：无害的显示问题，若修可让 `safe_name` 先剥离已知图片扩展名。
+- **图片文件名**：`idx_<url basename>`（已剥离扩展名，`ext_of()` 另加真实后缀），避免 `.jpg.jpg` 双后缀。
+- **分类只认福彩3D**：快乐8(01-80 两位数)、双色球、大乐透等非福彩3D彩种应判 `垃圾`；排列三同为三位数，目前仍并入直选（待定）。
 - **CDN 偶发 SSL 超时/死边缘**：下载已做重试 3 次 + API 兜底，勿移除重试。
 - **不要**在 `experiments/` 之外新增生成物；不要提交 `work/`、`all/`、`manifest.json` 等运行中间产物。
