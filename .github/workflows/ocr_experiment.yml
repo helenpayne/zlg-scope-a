@@ -104,33 +104,45 @@ jobs:
           mkdir -p "experiments/images/${AID}"
           cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
           python3 - <<'PY'
-          import csv, glob, os
+          import csv, glob, os, re
+          from collections import defaultdict
           aid = os.environ["AID"]
+          FIELDS = ["idx","sha256","url","name","kind","junk","content",
+                    "reason","model","sec","status"]
           db = f"experiments/vision_{aid}.csv"           # 该文章的持久数据库
           rows = {}
-          # 1) 已有历史结果(含旧的按区间命名的文件)先并入, 保证不丢
           for f in glob.glob(f"experiments/vision_{aid}*.csv"):
               with open(f, newline="", encoding="utf-8") as fh:
                   for r in csv.DictReader(fh):
                       if r.get("sha256"):
                           rows[r["sha256"]] = r
-          # 2) 本次新结果覆盖同名 sha
           new = 0
           for f in sorted(glob.glob("all/shard_*.csv")):
               with open(f, newline="", encoding="utf-8") as fh:
                   for r in csv.DictReader(fh):
                       if r.get("sha256"):
-                          rows[r["sha256"]] = r
-                          new += 1
+                          rows[r["sha256"]] = r; new += 1
           out = sorted(rows.values(), key=lambda r: int(r["idx"]))
-          if out:
-              with open(db, "w", newline="", encoding="utf-8") as fh:
-                  w = csv.DictWriter(fh, fieldnames=list(out[0].keys()))
-                  w.writeheader(); w.writerows(out)
-          k = {}
+          with open(db, "w", newline="", encoding="utf-8") as fh:
+              w = csv.DictWriter(fh, fieldnames=FIELDS, restval="", extrasaction="ignore")
+              w.writeheader(); w.writerows(out)
+          # 派生"整批垃圾"来源黑名单: 同一上传秒(ts)内 >=2 张且全为垃圾
+          def ts(u):
+              m = re.search(r"/(\d{14})", u or ""); return m.group(1) if m else ""
+          grp = defaultdict(list)
           for r in out:
-              k[r["kind"]] = k.get(r["kind"], 0) + 1
-          print(f"{db}: 数据库共 {len(out)} 张 (本次新增 {new}), kind={k}")
+              if ts(r["url"]): grp[ts(r["url"])].append(r)
+          skip = set()
+          for f in glob.glob(f"experiments/{aid}.skip*"):
+              skip |= {x.strip() for x in open(f, encoding="utf-8").read().split()}
+          for k, v in grp.items():
+              if len(v) >= 2 and all(x.get("kind") == "垃圾" for x in v):
+                  skip.add(k)
+          with open(f"experiments/{aid}.skip", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(sorted(skip)) + ("\n" if skip else ""))
+          k = defaultdict(int)
+          for r in out: k[r["kind"]] += 1
+          print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}")
           PY
       - name: commit
         run: |
