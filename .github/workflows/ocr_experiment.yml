@@ -138,11 +138,12 @@ jobs:
           with open(f"experiments/{aid}.skip", "w", encoding="utf-8") as fh:
               fh.write("\n".join(sorted(skip)) + ("\n" if skip else ""))
           # 维护全局"垃圾作者库": 凡是判为垃圾的行, 其 author 计入 experiments/junk_authors.txt
-          # (过滤平台水印"料阁/料图/臻料"等, 避免把公共水印当作者)
+          # (过滤平台水印"料阁/料图/臻料"及类别词"色彩吧/3D直选"等, 避免把公共水印/类别当作者)
           WM = ("料阁", "料閣", "料图", "料図", "臻料")
+          NON_AUTHOR = {"色彩吧", "3D直选", "P3直选", "垃圾", "3D", "P3", "直选"}
           def is_wm(n):
               n = (n or "").replace(" ", "")
-              return any(w in n for w in WM)
+              return n in NON_AUTHOR or any(w in n for w in WM)
           authors = set()
           for f in glob.glob("experiments/junk_authors*.txt"):
               for x in open(f, encoding="utf-8").read().splitlines():

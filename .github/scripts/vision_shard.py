@@ -84,14 +84,16 @@ def load_junk_authors():
 
 # 平台水印(非作者): 含这些子串的名称一律忽略(不算作者, 不入库, 不命中)
 WATERMARK_HINTS = ("料阁", "料閣", "料图", "料図", "臻料")
+# 类别词/非人名: 与 kind 同名或明显不是作者的, 也忽略
+NON_AUTHOR = {"色彩吧", "3D直选", "P3直选", "垃圾", "3D", "P3", "直选"}
 
 
-def is_watermark(name):
+def is_non_author(name):
     n = (name or "").replace(" ", "")
-    return any(w in n for w in WATERMARK_HINTS)
+    return n in NON_AUTHOR or any(w in n for w in WATERMARK_HINTS)
 
 
-JUNK_AUTHORS = {a for a in load_junk_authors() if not is_watermark(a)}
+JUNK_AUTHORS = {a for a in load_junk_authors() if not is_non_author(a)}
 
 
 def ts_of(url):
@@ -251,7 +253,7 @@ def work(item):
     kind = res.get("kind", "?")
     author = " ".join(str(res.get("author") or "").split())[:40]
     row["author"] = author
-    hit = bool(author) and author in JUNK_AUTHORS and not is_watermark(author)   # 命中垃圾作者库 -> 直接判垃圾
+    hit = bool(author) and author in JUNK_AUTHORS and not is_non_author(author)   # 命中垃圾作者库 -> 直接判垃圾
     if hit:
         kind = "垃圾"
     row["kind"] = kind
