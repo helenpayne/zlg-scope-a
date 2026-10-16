@@ -1,0 +1,117 @@
+name: ocr-experiment
+
+# 一次性实验: 5 个 runner 并行, 各拉一段"追加料图"URL -> 下载 -> RapidOCR -> LLM判垃圾 -> CSV 入库
+on:
+  workflow_dispatch:
+    inputs:
+      aid:
+        description: 文章ID
+        default: '2663478'
+      start:
+        description: 起始序号(1-based)
+        default: '1'
+      end:
+        description: 结束序号(含)
+        default: '100'
+      shards:
+        description: 并行 runner 数
+        default: '5'
+      llm_model:
+        description: 判定用大模型
+        default: opencode/space-bunny-free
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          n = int("${{ inputs.shards }}")
+          print("matrix=" + json.dumps(list(range(n))))
+          PY
+
+  shard:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      API_TOKEN: ${{ secrets.API_TOKEN }}
+      AID: ${{ inputs.aid }}
+      START: ${{ inputs.start }}
+      END: ${{ inputs.end }}
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ inputs.shards }}
+      LLM_MODEL: ${{ inputs.llm_model }}
+      OUT_DIR: out
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: deps
+        run: |
+          pip install -q rapidocr_onnxruntime 2>&1 | tail -2
+          npm install -g opencode-ai 2>&1 | tail -1
+          opencode --version 2>&1 | head -1
+      - name: run shard
+        run: python .github/scripts/ocr_shard.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out/
+
+  combine:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+          merge-multiple: true
+      - name: merge csv
+        env:
+          AID: ${{ inputs.aid }}
+          START: ${{ inputs.start }}
+          END: ${{ inputs.end }}
+        run: |
+          mkdir -p experiments
+          python3 - <<'PY'
+          import csv, glob, os
+          rows = []
+          for f in sorted(glob.glob("all/shard_*.csv")):
+              with open(f, newline="", encoding="utf-8") as fh:
+                  rows += list(csv.DictReader(fh))
+          rows.sort(key=lambda r: int(r["idx"]))
+          out = f"experiments/ocr_{os.environ['AID']}_{os.environ['START']}_{os.environ['END']}.csv"
+          with open(out, "w", newline="", encoding="utf-8") as fh:
+              w = csv.DictWriter(fh, fieldnames=list(rows[0].keys()))
+              w.writeheader(); w.writerows(rows)
+          j = sum(1 for r in rows if r["junk"] == "true")
+          print(f"{out}: {len(rows)} imgs, junk={j}, "
+                f"直选={sum(1 for r in rows if r['kind']=='直选')}, "
+                f"色彩吧={sum(1 for r in rows if r['kind']=='色彩吧')}")
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add experiments
+          git commit -m "ocr experiment ${{ inputs.aid }} ${{ inputs.start }}-${{ inputs.end }}" || echo "no change"
+          git push || echo "push failed"
