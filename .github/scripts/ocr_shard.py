@@ -46,23 +46,28 @@ PROMPT = (
 )
 CATEGORIES = {"直选", "色彩吧", "垃圾"}
 
-# 归一化: 去掉数字之间的 空格/逗号/连字符(OCR常丢空格导致号码连成一串)
+# 用户规则"三位数一组、组间分隔"的精确检测(记录用, 不单独覆盖 LLM)
+GROUPS_RE = re.compile(r"(?<!\d)(\d{3})(?:[ \t,，、\-/]+(\d{3}))+(?!\d)")
+# 归一化后连续数字串(OCR常丢空格); 数量作为提示喂给 LLM
 SEP_RE = re.compile(r"(?<=\d)[ \t,，、\-/]+(?=\d)")
-RUN_RE = re.compile(r"\d{9,}")   # 连续数字串, 至少 3 个三位数
+RUN_RE = re.compile(r"\d{9,}")
 
 
 def triples(text):
-    """检测三位数号码池。返回 (三位组合个数, 样例)。
-    先把数字间分隔符去掉, 再找长度>=9 且能被3整除的连续数字串。"""
-    t = SEP_RE.sub("", text or "")
+    """返回 (分隔三位组个数, 连续串三位数量, 样例)。"""
+    text = text or ""
+    n_sep = 0
+    for m in GROUPS_RE.finditer(text):
+        n_sep += len(re.findall(r"\d{3}", m.group(0)))
+    t = SEP_RE.sub("", text)
     pools = [m.group(0) for m in RUN_RE.finditer(t)]
     pools = [p for p in pools if len(p) % 3 == 0]
-    n = sum(len(p) // 3 for p in pools)
+    n_run = sum(len(p) // 3 for p in pools)
     sample = ""
     if pools:
         p = pools[0]
         sample = " ".join(p[i:i + 3] for i in range(0, min(len(p), 30), 3))
-    return n, sample
+    return n_sep, n_run, sample
 
 _ocr = None
 _ocr_lock = threading.Lock()
@@ -155,8 +160,8 @@ def ext_of(url, data):
 def work(item):
     idx, sha, url = item["idx"], item["sha256"], item["url"]
     row = {"idx": idx, "sha256": sha, "url": url, "name": safe_name(idx, sha, url),
-           "chars": 0, "triples": 0, "sample": "", "say": "", "kind": "?", "junk": "",
-           "reason": "", "ocr_sec": "", "llm_sec": "", "status": "ok"}
+           "chars": 0, "sep3": 0, "runs3": 0, "sample": "", "say": "", "kind": "?",
+           "junk": "", "reason": "", "ocr_sec": "", "llm_sec": "", "status": "ok"}
     t0 = time.time()
     try:
         data = fetch_bytes(url, sha)
@@ -169,8 +174,9 @@ def work(item):
     text = "\n".join(lines)
     row["ocr_sec"] = round(time.time() - t0, 1)
     row["chars"] = len(text)
-    ntri, sample = triples(text)
-    row["triples"] = ntri
+    n_sep, n_run, sample = triples(text)
+    row["sep3"] = n_sep
+    row["runs3"] = n_run
     row["sample"] = sample
     (OUT_DIR / "ocr").mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "ocr" / (row["name"] + ".txt")).write_text(text or "", encoding="utf-8")
@@ -178,22 +184,22 @@ def work(item):
         row.update(kind="垃圾", junk="true", reason="empty ocr")
         return row
     t1 = time.time()
-    hint = (f"\n\n[程序检测] 该文本中\"三位号码组合\"段数={ntri}"
+    hint = (f"\n\n[程序检测] 该文本中\"三位号码组合\"段数={n_run}"
             + (f", 样例: {sample}" if sample else ""))
     res = llm_kind(text, hint)
     row["llm_sec"] = round(time.time() - t1, 1)
     say = res.get("kind", "?")
     row["say"] = say
     if say == "色彩吧":
-        final, junk = "色彩吧", False
-    elif ntri > 0 or say == "直选":
-        final, junk = "直选", False
-    elif say in ("垃圾", "?"):
-        final, junk = "垃圾", True
-    else:
-        final, junk = say, False
+        final = "色彩吧"
+    elif say == "直选":
+        final = "直选"
+    elif say == "垃圾":
+        final = "垃圾"
+    else:  # LLM 解析失败: 用检测值兜底
+        final = "直选" if (n_sep >= 2 or n_run >= 3) else "垃圾"
     row["kind"] = final
-    row["junk"] = "true" if junk else "false"
+    row["junk"] = "true" if final == "垃圾" else "false"
     row["reason"] = (res.get("reason") or "")[:80]
     return row
 
@@ -216,7 +222,7 @@ def main():
         for row in ex.map(work, items):
             rows.append(row)
             print(f"  [{row['idx']}] {row['kind']:4s} junk={row['junk']:5s} "
-                  f"triples={row['triples']:3d} chars={row['chars']:5d} "
+                  f"sep3={row['sep3']:3d} runs3={row['runs3']:3d} chars={row['chars']:5d} "
                   f"ocr={row['ocr_sec']}s llm={row['llm_sec']}s", flush=True)
     rows.sort(key=lambda r: r["idx"])
     csv_path = OUT_DIR / f"shard_{SHARD}.csv"
