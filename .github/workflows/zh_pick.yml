@@ -1,0 +1,94 @@
+name: zh-pick
+
+# 直选抽注(GA): 本机不再跑 opencode 抽注。
+# 每个 runner 拉一段"待抽注文本"(追加料文本 + 已 OCR 追加图) -> opencode 提取
+# 福彩3D 当期直选注 -> POST /api/ga/pick 写 MySQL fact_pick_img(按来源先清后插)。
+on:
+  workflow_dispatch:
+    inputs:
+      aid:
+        description: 文章ID(优先)
+        default: '2793811'
+      issue:
+        description: 期号(如 276 或 2026276); aid=0 时用
+        default: ''
+      start:
+        description: 起始序号(1-based)
+        default: '1'
+      end:
+        description: 结束序号(含)
+        default: '1000'
+      shards:
+        description: 并行 runner 数
+        default: '3'
+      pick_concurrency:
+        description: 每个runner内 opencode 并行窗口数
+        default: '3'
+      pick_models:
+        description: 模型(逗号分隔, 顺序轮询; 首个成功即用)
+        default: 'opencode/space-bunny-free,opencode/big-pickle,opencode/mimo-v2.6-flash-free'
+      force:
+        description: '1=忽略 pick_done 全量重跑; 0=只处理新增(默认)'
+        default: '0'
+  workflow_call:
+    inputs:
+      aid:
+        type: string
+        default: '0'
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          n = int("${{ inputs.shards }}")
+          print("matrix=" + json.dumps(list(range(n))))
+          PY
+
+  shard:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      API_TOKEN: ${{ secrets.API_TOKEN }}
+      AID: ${{ inputs.aid }}
+      ISSUE: ${{ inputs.issue }}
+      START: ${{ inputs.start }}
+      END: ${{ inputs.end }}
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ inputs.shards }}
+      PICK_CONCURRENCY: ${{ inputs.pick_concurrency }}
+      PICK_MODELS: ${{ inputs.pick_models }}
+      FORCE: ${{ inputs.force }}
+      OUT_DIR: out
+      LLM_TIMEOUT: '120'
+      SHARD_DEADLINE_SEC: '1500'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: deps
+        run: |
+          npm install -g opencode-ai 2>&1 | tail -1
+          opencode --version 2>&1 | head -1
+      - name: run shard
+        run: python .github/scripts/pick_shard.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pick-shard-${{ matrix.shard }}
+          path: out/
