@@ -122,23 +122,7 @@ jobs:
                       if r.get("sha256"):
                           rows[r["sha256"]] = r; new += 1
           out = sorted(rows.values(), key=lambda r: int(r["idx"]))
-          with open(db, "w", newline="", encoding="utf-8") as fh:
-              w = csv.DictWriter(fh, fieldnames=FIELDS, restval="", extrasaction="ignore")
-              w.writeheader(); w.writerows(out)
-          # 派生"整批垃圾"来源黑名单: 同一上传秒(ts)内 >=2 张且全为垃圾
-          def ts(u):
-              m = re.search(r"/(\d{14})", u or ""); return m.group(1) if m else ""
-          grp = defaultdict(list)
-          for r in out:
-              if ts(r["url"]): grp[ts(r["url"])].append(r)
-          skip = set()
-          for k, v in grp.items():
-              if len(v) >= 2 and all(x.get("kind") == "垃圾" for x in v):
-                  skip.add(k)
-          with open(f"experiments/{aid}.skip", "w", encoding="utf-8") as fh:
-              fh.write("\n".join(sorted(skip)) + ("\n" if skip else ""))
-          # 作者白名单: 与『色彩吧』同图共现的作者 + 『色彩吧』本身
-          # (他们是色彩吧栏目作者, 永不计入/不命中垃圾作者库)
+          # --- 作者白名单: 与『色彩吧』同图共现的作者 + 『色彩吧』本身 (永久, 不计入/不命中垃圾库) ---
           whitelist = {"色彩吧"}
           for f in glob.glob("experiments/author_whitelist*.txt"):
               for x in open(f, encoding="utf-8").read().splitlines():
@@ -150,10 +134,7 @@ jobs:
               a = (r.get("author") or "").strip()
               if a and has_scb(r) and a not in whitelist:
                   whitelist.add(a); wl_added.add(a)
-          with open("experiments/author_whitelist.txt", "w", encoding="utf-8") as fh:
-              fh.write("\n".join(sorted(whitelist)) + "\n")
-          # 维护全局"垃圾作者库": 凡是判为垃圾的行, 其 author 计入 experiments/junk_authors.txt
-          # (过滤平台水印"料阁/料图/臻料"、类别词"色彩吧/3D直选"及白名单作者)
+          # --- 垃圾作者库: 原始判定为垃圾的行的作者 (过滤平台水印/类别词/白名单作者) ---
           WM = ("料阁", "料閣", "料图", "料図", "臻料")
           NON_AUTHOR = {"色彩吧", "3D直选", "P3直选", "垃圾", "3D", "P3", "直选"}
           def is_wm(n):
@@ -170,11 +151,37 @@ jobs:
               a = (r.get("author") or "").strip()
               if r.get("kind") == "垃圾" and a and not is_wm(a) and a not in whitelist and a not in authors:
                   authors.add(a); added.add(a)
+          # --- 用当轮最终库+白名单统一裁决(消除"旧库滞后"): 命中垃圾作者库且非色彩吧 -> 垃圾 ---
+          hitn = 0
+          for r in out:
+              a = (r.get("author") or "").strip()
+              if r.get("kind") != "色彩吧" and a and a in authors and not is_wm(a):
+                  r["kind"] = "垃圾"; r["junk"] = "true"; r["content"] = ""
+                  if not (r.get("reason") or "").startswith("作者库命中"):
+                      r["reason"] = f"作者库命中[{a}]: {r.get('reason','')}"[:80]
+                  hitn += 1
+          with open(db, "w", newline="", encoding="utf-8") as fh:
+              w = csv.DictWriter(fh, fieldnames=FIELDS, restval="", extrasaction="ignore")
+              w.writeheader(); w.writerows(out)
+          # 派生"整批垃圾"来源黑名单: 同一上传秒(ts)内 >=2 张且全为垃圾
+          def ts(u):
+              m = re.search(r"/(\d{14})", u or ""); return m.group(1) if m else ""
+          grp = defaultdict(list)
+          for r in out:
+              if ts(r["url"]): grp[ts(r["url"])].append(r)
+          skip = set()
+          for k, v in grp.items():
+              if len(v) >= 2 and all(x.get("kind") == "垃圾" for x in v):
+                  skip.add(k)
+          with open(f"experiments/{aid}.skip", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(sorted(skip)) + ("\n" if skip else ""))
+          with open("experiments/author_whitelist.txt", "w", encoding="utf-8") as fh:
+              fh.write("\n".join(sorted(whitelist)) + "\n")
           with open("experiments/junk_authors.txt", "w", encoding="utf-8") as fh:
               fh.write("\n".join(sorted(authors)) + ("\n" if authors else ""))
           k = defaultdict(int)
           for r in out: k[r["kind"]] += 1
-          print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}")
+          print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}, 库命中={hitn}")
           print(f"垃圾作者库: 共 {len(authors)} 个(本次新增 {sorted(added)})")
           print(f"作者白名单: 共 {len(whitelist)} 个(本次新增 {sorted(wl_added)})")
           PY
