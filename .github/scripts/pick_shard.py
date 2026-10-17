@@ -188,7 +188,12 @@ def main():
         print(f"shard {SHARD} empty (range {s}-{e})")
         return
     q = f"/api/ga/pick_tasks?start={s}&end={e}&all={1 if FORCE else 0}"
-    q += f"&aid={AID}" if AID else f"&issue={ISSUE}"
+    if AID:
+        q += f"&aid={AID}"
+    elif ISSUE:
+        q += f"&issue={ISSUE}"
+    else:
+        q += "&recent=1"      # 无 aid/issue: 只处理最新一期
     d = api_get(q)
     items = d["items"]
     print(f"shard {SHARD}/{SHARDS} range {d['start']}-{d['end']} "

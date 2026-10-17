@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       aid:
-        description: 文章ID(优先)
-        default: '2793811'
+        description: 文章ID(优先); 0=自动(见 issue/recent)
+        default: '0'
       issue:
         description: 期号(如 276 或 2026276); aid=0 时用
         default: ''
@@ -30,6 +30,10 @@ on:
       force:
         description: '1=忽略 pick_done 全量重跑; 0=只处理新增(默认)'
         default: '0'
+  schedule:
+    # 自动抽注: aid=0 且 issue 空 -> recent=1(只处理最新一期)
+    # 北京 12:00-23:20 (UTC 04:00-15:20), 每20分钟
+    - cron: '*/20 4-15 * * *'
   workflow_call:
     inputs:
       aid:
