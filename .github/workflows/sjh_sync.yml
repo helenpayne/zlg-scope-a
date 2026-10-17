@@ -1,0 +1,28 @@
+name: sjh-sync
+
+# 试机号同步(GA): 拉私有仓 suwei8/pinble-data 的 k3_full_history.csv
+# -> 解析 -> POST /api/ga/sjh 写 MySQL dim_shijihao。
+# 上游 collect.yml 北京 17:40-18:40 提交当日试机号, 故北京 20-23 点各跑一次。
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12,13,14,15 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: sync
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          PINBLE_TOKEN: ${{ secrets.PINBLE_TOKEN }}
+        run: python .github/scripts/sjh_sync.py
