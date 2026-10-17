@@ -30,6 +30,12 @@ on:
 permissions:
   contents: write
 
+# 串行执行: 合并阶段会累积/重写 垃圾作者库 与 作者白名单(全局文件),
+# 并发会互相覆盖丢失, 故同一时刻只跑一个 run。
+concurrency:
+  group: vision-experiment
+  cancel-in-progress: false
+
 jobs:
   prepare:
     runs-on: ubuntu-latest
@@ -214,4 +220,8 @@ jobs:
           git config user.email "actions@github.com"
           git add -A experiments
           git commit -m "vision experiment ${{ inputs.aid }} ${{ inputs.start }}-${{ inputs.end }}" || echo "no change"
-          git push || echo "push failed"
+          for i in 1 2 3 4 5; do
+            git push && break
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
