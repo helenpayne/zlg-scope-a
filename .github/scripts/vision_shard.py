@@ -72,45 +72,6 @@ PROMPT = (
 CATEGORIES = {"3D直选", "P3直选", "色彩吧", "垃圾"}
 
 
-def load_junk_authors():
-    """全局"垃圾作者库": experiments/junk_authors*.txt, 每行一个作者名。
-    命中即直接判垃圾(无需再纠结该图内容)。"""
-    s = set()
-    for f in glob.glob("experiments/junk_authors*.txt"):
-        try:
-            s |= {x.strip() for x in open(f, encoding="utf-8").read().splitlines() if x.strip()}
-        except Exception:
-            pass
-    return s
-
-
-def load_whitelist():
-    """作者白名单: experiments/author_whitelist*.txt。
-    与『色彩吧』同图出现的作者即认定为色彩吧作者, 永不计入/不命中垃圾作者库。"""
-    s = set()
-    for f in glob.glob("experiments/author_whitelist*.txt"):
-        try:
-            s |= {x.strip() for x in open(f, encoding="utf-8").read().splitlines() if x.strip()}
-        except Exception:
-            pass
-    return s
-
-
-# 平台水印(非作者): 含这些子串的名称一律忽略(不算作者, 不入库, 不命中)
-WATERMARK_HINTS = ("料阁", "料閣", "料图", "料図", "臻料")
-# 类别词/非人名: 与 kind 同名或明显不是作者的, 也忽略
-NON_AUTHOR = {"色彩吧", "3D直选", "P3直选", "垃圾", "3D", "P3", "直选"}
-
-
-def is_non_author(name):
-    n = (name or "").replace(" ", "")
-    return n in NON_AUTHOR or any(w in n for w in WATERMARK_HINTS)
-
-
-WHITELIST = load_whitelist() | {"色彩吧"}
-JUNK_AUTHORS = {a for a in load_junk_authors() if not is_non_author(a) and a not in WHITELIST}
-
-
 def ts_of(url):
     m = re.search(r"/(\d{14})", url or "")
     return m.group(1) if m else ""
@@ -275,18 +236,11 @@ def work(item):
     kind = res.get("kind", "?")
     author = " ".join(str(res.get("author") or "").split())[:40]
     row["author"] = author
-    hit = (bool(author) and author in JUNK_AUTHORS
-           and author not in WHITELIST and not is_non_author(author))   # 命中垃圾作者库 -> 直接判垃圾(白名单除外)
-    if hit:
-        kind = "垃圾"
     row["kind"] = kind
     row["junk"] = ("true" if kind == "垃圾" else
                    ("false" if kind in CATEGORIES else ""))
     row["content"] = "" if kind == "垃圾" else (" ".join(str(res.get("content") or "").split()))[:800]
-    reason = res.get("reason") or ""
-    if hit:
-        reason = f"作者库命中[{author}]: {reason}"
-    row["reason"] = reason[:80]
+    row["reason"] = (res.get("reason") or "")[:80]
     row["votes"] = votes[:200]
     row["model"] = model.split("/")[-1] if model != "-" else "-"
     return row
