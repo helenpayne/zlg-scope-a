@@ -123,7 +123,8 @@ def load_known(aid):
         try:
             with open(f, newline="", encoding="utf-8") as fh:
                 for r in csv.DictReader(fh):
-                    if r.get("sha256"):
+                    # 只把"成功(status=ok)"的行视为已判, 下载失败行下次重试
+                    if r.get("sha256") and (r.get("status") or "").startswith("ok"):
                         known.add(r["sha256"])
         except Exception:
             pass
@@ -157,10 +158,16 @@ def fetch_bytes(url, sha):
         except Exception as e:
             last = e
             time.sleep(1 + attempt)
-    req = urllib.request.Request(f"{API_BASE}/api/ga/img/{sha}",
-                                 headers={"X-GA-Token": API_TOKEN})
-    with urllib.request.urlopen(req, timeout=DL_TIMEOUT) as r:
-        return r.read()
+    for attempt in range(DL_RETRY):
+        try:
+            req = urllib.request.Request(f"{API_BASE}/api/ga/img/{sha}",
+                                         headers={"X-GA-Token": API_TOKEN})
+            with urllib.request.urlopen(req, timeout=DL_TIMEOUT) as r:
+                return r.read()
+        except Exception as e:
+            last = e
+            time.sleep(1 + attempt)
+    raise last
 
 
 def safe_name(idx, sha, url):
