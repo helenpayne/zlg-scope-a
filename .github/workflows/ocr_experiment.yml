@@ -144,7 +144,7 @@ jobs:
               for x in open(f, encoding="utf-8").read().splitlines():
                   if x.strip(): whitelist.add(x.strip())
           def has_scb(r):
-              return "色彩吧" in ((r.get("reason") or "") + " " + (r.get("content") or ""))
+              return r.get("kind") == "色彩吧" or "色彩吧" in ((r.get("reason") or "") + " " + (r.get("content") or ""))
           wl_added = set()
           for r in out:
               a = (r.get("author") or "").strip()
