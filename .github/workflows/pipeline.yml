@@ -26,9 +26,7 @@ on:
         description: '1=忽略已处理状态(演练/重跑)'
         required: false
         default: '0'
-  schedule:
-    # 自动消化待 OCR 追加图: 北京 12:00-23:50 (UTC 04:00-15:50), 每10分钟
-    - cron: '*/10 4-15 * * *'
+# schedule 已停用: 改由本机 cron 经 workflow_dispatch 驱动(collector/ga_trigger.sh)。
 
 concurrency:
   group: pipeline

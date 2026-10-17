@@ -30,10 +30,7 @@ on:
       force:
         description: '1=忽略 pick_done 全量重跑; 0=只处理新增(默认)'
         default: '0'
-  schedule:
-    # 自动抽注: aid=0 且 issue 空 -> recent=1(只处理最新一期)
-    # 北京 12:00-23:20 (UTC 04:00-15:20), 每20分钟
-    - cron: '*/20 4-15 * * *'
+  # schedule 已停用: 改由本机 cron 经 workflow_dispatch 驱动(collector/ga_trigger.sh)
   workflow_call:
     inputs:
       aid:
