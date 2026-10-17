@@ -98,12 +98,14 @@ jobs:
           AID: ${{ inputs.aid }}
           START: ${{ inputs.start }}
           END: ${{ inputs.end }}
+          API_BASE: ${{ secrets.API_BASE }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
           # 图片: 按文章子目录存放, 采用"合并"策略(不删除), 避免局部/空跑把范围外或已有图片抹掉
           mkdir -p "experiments/images/${AID}"
           cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
           python3 - <<'PY'
-          import csv, glob, os, re
+          import csv, glob, json, os, re
           from collections import defaultdict
           aid = os.environ["AID"]
           FIELDS = ["idx","sha256","url","name","kind","junk","content",
@@ -184,6 +186,27 @@ jobs:
           print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}, 库命中={hitn}")
           print(f"垃圾作者库: 共 {len(authors)} 个(本次新增 {sorted(added)})")
           print(f"作者白名单: 共 {len(whitelist)} 个(本次新增 {sorted(wl_added)})")
+          # 自动入库: 色彩吧行 -> ga_api -> MySQL fact_scb_vision
+          api = (os.environ.get("API_BASE") or "").rstrip("/")
+          tok = os.environ.get("API_TOKEN") or ""
+          scb = [{"sha256": r["sha256"], "article_id": int(aid),
+                  "idx": int(r["idx"]), "url": r.get("url") or "",
+                  "author": r.get("author") or "", "content": r.get("content") or "",
+                  "kind": r.get("kind") or ""}
+                 for r in out if r.get("kind") == "色彩吧" and r.get("sha256")]
+          if api and tok and scb:
+              import urllib.request
+              req = urllib.request.Request(
+                  f"{api}/api/ga/scb",
+                  data=json.dumps({"items": scb}).encode(),
+                  headers={"X-GA-Token": tok, "Content-Type": "application/json"})
+              try:
+                  resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
+                  print(f"色彩吧入库: 发 {len(scb)} 行 -> {resp}")
+              except Exception as e:
+                  print(f"色彩吧入库失败: {e}")
+          else:
+              print(f"色彩吧入库: 跳过(api/token缺失或无色吧行, scb={len(scb)})")
           PY
       - name: commit
         run: |
