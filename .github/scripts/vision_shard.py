@@ -11,6 +11,7 @@ import glob
 import json
 import os
 import re
+import signal
 import subprocess
 import time
 import urllib.request
@@ -192,15 +193,36 @@ def parse(out):
     return None
 
 
+def _run_llm(cmd, timeout):
+    """运行 opencode; 超时时杀掉整个进程组(含孙进程), 避免管道被占导致永久挂起。"""
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=True, start_new_session=True)
+    try:
+        out, _ = p.communicate(timeout=timeout)
+        return out
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+        except Exception:
+            try:
+                p.kill()
+            except Exception:
+                pass
+        try:
+            p.communicate(timeout=5)
+        except Exception:
+            pass
+        raise
+
+
 def one_call(img_path, model):
     """单次调用; 失败/解析失败最多重试 VOTE_RETRY 次。返回结果dict或None。"""
     for _ in range(VOTE_RETRY):
         try:
-            r = subprocess.run(
+            out = _run_llm(
                 [OPENCODE_BIN, "run", "-m", model, "-f", str(img_path),
-                 "--title", "x", PROMPT],
-                capture_output=True, text=True, timeout=LLM_TIMEOUT)
-            j = parse(r.stdout)
+                 "--title", "x", PROMPT], LLM_TIMEOUT)
+            j = parse(out)
             if j:
                 return j
         except Exception:
