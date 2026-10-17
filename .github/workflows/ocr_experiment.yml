@@ -186,7 +186,7 @@ jobs:
           print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}, 库命中={hitn}")
           print(f"垃圾作者库: 共 {len(authors)} 个(本次新增 {sorted(added)})")
           print(f"作者白名单: 共 {len(whitelist)} 个(本次新增 {sorted(wl_added)})")
-          # 自动入库: 色彩吧行 -> ga_api -> MySQL fact_scb_vision
+          # 自动入库: 色彩吧行 -> ga_api -> MySQL fact_scb_vision (按文章先清后插)
           api = (os.environ.get("API_BASE") or "").rstrip("/")
           tok = os.environ.get("API_TOKEN") or ""
           scb = [{"sha256": r["sha256"], "article_id": int(aid),
@@ -194,11 +194,11 @@ jobs:
                   "author": r.get("author") or "", "content": r.get("content") or "",
                   "kind": r.get("kind") or ""}
                  for r in out if r.get("kind") == "色彩吧" and r.get("sha256")]
-          if api and tok and scb:
+          if api and tok:
               import urllib.request
               req = urllib.request.Request(
                   f"{api}/api/ga/scb",
-                  data=json.dumps({"items": scb}).encode(),
+                  data=json.dumps({"article_id": int(aid), "items": scb}).encode(),
                   headers={"X-GA-Token": tok, "Content-Type": "application/json"})
               try:
                   resp = json.loads(urllib.request.urlopen(req, timeout=30).read())
@@ -206,7 +206,7 @@ jobs:
               except Exception as e:
                   print(f"色彩吧入库失败: {e}")
           else:
-              print(f"色彩吧入库: 跳过(api/token缺失或无色吧行, scb={len(scb)})")
+              print(f"色彩吧入库: 跳过(api/token缺失, scb={len(scb)})")
           PY
       - name: commit
         run: |
