@@ -39,6 +39,10 @@ OPENCODE_BIN = os.environ.get("OPENCODE_BIN", "opencode")
 LLM_TIMEOUT = int(os.environ.get("LLM_TIMEOUT", "240"))
 VOTE_RETRY = int(os.environ.get("VOTE_RETRY", "2"))
 DL_TIMEOUT = 15
+# 单个 shard 的内部截止(秒): 超过后不再启动新图, 直接落盘已有结果,
+# 避免"卡死 -> job 45 分钟超时 -> 整个 run 被 cancel -> 本批 CSV 全废"。
+_DL = int(os.environ.get("SHARD_DEADLINE_SEC", "0"))
+DEADLINE = (time.time() + _DL) if _DL > 0 else 0
 DL_RETRY = 3
 
 # CSV 数据库列(顺序固定; 空结果也按此写表头)
@@ -263,6 +267,9 @@ def work(item):
     row = {"idx": idx, "sha256": sha, "url": url, "name": safe_name(idx, sha, url),
            "kind": "?", "junk": "", "content": "", "author": "", "reason": "",
            "votes": "", "model": "", "sec": "", "status": "ok"}
+    if DEADLINE and time.time() > DEADLINE:
+        row["status"] = "skip:deadline"
+        return row
     t0 = time.time()
     try:
         data = fetch_bytes(url, sha)

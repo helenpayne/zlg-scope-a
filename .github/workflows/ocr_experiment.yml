@@ -70,6 +70,8 @@ jobs:
       VISION_MODELS: ${{ inputs.vision_models }}
       FORCE: ${{ inputs.force }}
       OUT_DIR: out
+      LLM_TIMEOUT: '120'
+      SHARD_DEADLINE_SEC: '1500'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
