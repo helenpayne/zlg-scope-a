@@ -64,8 +64,9 @@ PROMPT = (
     "图中若出现『色彩吧』等栏目标签, 请务必一并提取与其**同现的作者名**(即使整图内容是往期号码表); "
     "**忽略角落/边缘的固定平台水印**(如『臻料阁』等带'料阁/料图'的粉色标识), 那是平台不是作者; "
     "看不清或不明显则填空串)。\n"
-    "若为 3D直选/P3直选/色彩吧, 在 content 字段**原样提取**图中号码/内容"
-    "(号码池逐组列出, 空格分隔; 色彩吧列出其号码); 垃圾则 content 留空。\n"
+    "若为 3D直选/P3直选/色彩吧, 在 content 字段**逐行原样提取图中全部文字**"
+    "(含期号/玩法词/号码/开奖号/对错判定等), **行与行之间用换行分隔**, 保持原顺序, "
+    "不要合并成一行、不要改写、不要漏行; 垃圾则 content 留空。\n"
     '只输出一行JSON, 不要解释: '
     '{"kind":"3D直选|P3直选|色彩吧|垃圾","junk":true/false,"content":"...","author":"作者名或空","reason":"简短"}'
 )
@@ -156,7 +157,7 @@ def ext_of(url, data):
 
 
 def parse(out):
-    """从模型输出里找 JSON(容忍前后有其它文字)。"""
+    """从模型输出里找 JSON(容忍前后有其它文字, 且 content 可能含真实换行)。"""
     out = out or ""
     for line in out.splitlines():
         i, j = line.find("{"), line.rfind("}")
@@ -167,6 +168,24 @@ def parse(out):
                     return k
             except Exception:
                 pass
+    # content 带真实换行时 JSON 会跨多行: 按花括号配对提取
+    i = out.find("{")
+    while i >= 0:
+        depth = 0
+        for j in range(i, len(out)):
+            if out[j] == "{":
+                depth += 1
+            elif out[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        k = json.loads(out[i:j + 1])
+                        if k.get("kind") in CATEGORIES:
+                            return k
+                    except Exception:
+                        pass
+                    break
+        i = out.find("{", i + 1)
     for k in ("3D直选", "P3直选", "色彩吧", "垃圾"):
         if k in out:
             return {"kind": k, "junk": k == "垃圾", "content": "", "reason": "fallback"}
@@ -239,7 +258,7 @@ def work(item):
     row["kind"] = kind
     row["junk"] = ("true" if kind == "垃圾" else
                    ("false" if kind in CATEGORIES else ""))
-    row["content"] = "" if kind == "垃圾" else (" ".join(str(res.get("content") or "").split()))[:800]
+    row["content"] = "" if kind == "垃圾" else str(res.get("content") or "").strip()[:4000]
     row["reason"] = (res.get("reason") or "")[:80]
     row["votes"] = votes[:200]
     row["model"] = model.split("/")[-1] if model != "-" else "-"
