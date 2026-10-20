@@ -1,8 +1,8 @@
 # 2878635 图片文字转写
 
 - 图片总数: **474**
-- 成功: **462**
-- 其他状态: {'err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired)': 11, 'err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired)': 1}
+- 成功: **469**
+- 其他状态: {'err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired)': 4, 'err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired)': 1}
 
 | idx | 图片 | Markdown | 状态 | 字数 |
 |---:|---|---|---|---:|
@@ -125,18 +125,18 @@
 | 117 | [images/0117_20261019015030b22587732_img.jpg](images/0117_20261019015030b22587732_img.jpg) | [md/0117_20261019015030b22587732_img.md](md/0117_20261019015030b22587732_img.md) | ok | 33 |
 | 118 | [images/0118_2026101901503061b503403_img.jpg](images/0118_2026101901503061b503403_img.jpg) | [md/0118_2026101901503061b503403_img.md](md/0118_2026101901503061b503403_img.md) | ok | 38 |
 | 119 | [images/0119_202610190150306e9f17374_img.jpg](images/0119_202610190150306e9f17374_img.jpg) | [md/0119_202610190150306e9f17374_img.md](md/0119_202610190150306e9f17374_img.md) | ok | 38 |
-| 120 | [images/0120_202610190150307ce0e9262_img.png](images/0120_202610190150307ce0e9262_img.png) | [md/0120_202610190150307ce0e9262_img.md](md/0120_202610190150307ce0e9262_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 120 | [images/0120_202610190150307ce0e9262_img.png](images/0120_202610190150307ce0e9262_img.png) | [md/0120_202610190150307ce0e9262_img.md](md/0120_202610190150307ce0e9262_img.md) | ok | 7125 |
 | 121 | [images/0121_20261019015030c8ba69842_img.png](images/0121_20261019015030c8ba69842_img.png) | [md/0121_20261019015030c8ba69842_img.md](md/0121_20261019015030c8ba69842_img.md) | ok | 5454 |
-| 122 | [images/0122_20261019015030d63256919_img.png](images/0122_20261019015030d63256919_img.png) | [md/0122_20261019015030d63256919_img.md](md/0122_20261019015030d63256919_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 122 | [images/0122_20261019015030d63256919_img.png](images/0122_20261019015030d63256919_img.png) | [md/0122_20261019015030d63256919_img.md](md/0122_20261019015030d63256919_img.md) | ok | 4750 |
 | 123 | [images/0123_20261019015031506442180_img.png](images/0123_20261019015031506442180_img.png) | [md/0123_20261019015031506442180_img.md](md/0123_20261019015031506442180_img.md) | ok | 2365 |
-| 124 | [images/0124_202610190150317e6559828_img.png](images/0124_202610190150317e6559828_img.png) | [md/0124_202610190150317e6559828_img.md](md/0124_202610190150317e6559828_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 125 | [images/0125_202610190150310ec353363_img.png](images/0125_202610190150310ec353363_img.png) | [md/0125_202610190150310ec353363_img.md](md/0125_202610190150310ec353363_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 124 | [images/0124_202610190150317e6559828_img.png](images/0124_202610190150317e6559828_img.png) | [md/0124_202610190150317e6559828_img.md](md/0124_202610190150317e6559828_img.md) | ok | 8461 |
+| 125 | [images/0125_202610190150310ec353363_img.png](images/0125_202610190150310ec353363_img.png) | [md/0125_202610190150310ec353363_img.md](md/0125_202610190150310ec353363_img.md) | ok | 3439 |
 | 126 | [images/0126_202610190150313409b2595_img.png](images/0126_202610190150313409b2595_img.png) | [md/0126_202610190150313409b2595_img.md](md/0126_202610190150313409b2595_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 127 | [images/0127_20261019015031986502295_img.jpg](images/0127_20261019015031986502295_img.jpg) | [md/0127_20261019015031986502295_img.md](md/0127_20261019015031986502295_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 128 | [images/0128_20261019015031570f48256_img.jpg](images/0128_20261019015031570f48256_img.jpg) | [md/0128_20261019015031570f48256_img.md](md/0128_20261019015031570f48256_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 127 | [images/0127_20261019015031986502295_img.jpg](images/0127_20261019015031986502295_img.jpg) | [md/0127_20261019015031986502295_img.md](md/0127_20261019015031986502295_img.md) | ok | 3734 |
+| 128 | [images/0128_20261019015031570f48256_img.jpg](images/0128_20261019015031570f48256_img.jpg) | [md/0128_20261019015031570f48256_img.md](md/0128_20261019015031570f48256_img.md) | err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
 | 129 | [images/0129_20261019015031c75417765_img.png](images/0129_20261019015031c75417765_img.png) | [md/0129_20261019015031c75417765_img.md](md/0129_20261019015031c75417765_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 130 | [images/0130_20261019015031136cb9907_img.png](images/0130_20261019015031136cb9907_img.png) | [md/0130_20261019015031136cb9907_img.md](md/0130_20261019015031136cb9907_img.md) | err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 131 | [images/0131_202610190150314a69e9318_img.png](images/0131_202610190150314a69e9318_img.png) | [md/0131_202610190150314a69e9318_img.md](md/0131_202610190150314a69e9318_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 130 | [images/0130_20261019015031136cb9907_img.png](images/0130_20261019015031136cb9907_img.png) | [md/0130_20261019015031136cb9907_img.md](md/0130_20261019015031136cb9907_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 131 | [images/0131_202610190150314a69e9318_img.png](images/0131_202610190150314a69e9318_img.png) | [md/0131_202610190150314a69e9318_img.md](md/0131_202610190150314a69e9318_img.md) | ok | 92 |
 | 132 | [images/0132_20261019121502f1fc44457_img.jpg](images/0132_20261019121502f1fc44457_img.jpg) | [md/0132_20261019121502f1fc44457_img.md](md/0132_20261019121502f1fc44457_img.md) | ok | 164 |
 | 133 | [images/0133_2026101912150279b502783_img.jpg](images/0133_2026101912150279b502783_img.jpg) | [md/0133_2026101912150279b502783_img.md](md/0133_2026101912150279b502783_img.md) | ok | 249 |
 | 134 | [images/0134_20261019121502bd66f7217_img.jpg](images/0134_20261019121502bd66f7217_img.jpg) | [md/0134_20261019121502bd66f7217_img.md](md/0134_20261019121502bd66f7217_img.md) | ok | 101 |
@@ -194,7 +194,7 @@
 | 186 | [images/0186_20261019121425161cd4142_img.jpg](images/0186_20261019121425161cd4142_img.jpg) | [md/0186_20261019121425161cd4142_img.md](md/0186_20261019121425161cd4142_img.md) | ok | 288 |
 | 187 | [images/0187_20261019121425b31715012_img.jpg](images/0187_20261019121425b31715012_img.jpg) | [md/0187_20261019121425b31715012_img.md](md/0187_20261019121425b31715012_img.md) | ok | 457 |
 | 188 | [images/0188_20261019121425375387840_img.jpg](images/0188_20261019121425375387840_img.jpg) | [md/0188_20261019121425375387840_img.md](md/0188_20261019121425375387840_img.md) | ok | 204 |
-| 189 | [images/0189_20261019121425a3a084926_img.jpg](images/0189_20261019121425a3a084926_img.jpg) | [md/0189_20261019121425a3a084926_img.md](md/0189_20261019121425a3a084926_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 189 | [images/0189_20261019121425a3a084926_img.jpg](images/0189_20261019121425a3a084926_img.jpg) | [md/0189_20261019121425a3a084926_img.md](md/0189_20261019121425a3a084926_img.md) | ok | 3914 |
 | 190 | [images/0190_2026101912142522a794622_img.jpg](images/0190_2026101912142522a794622_img.jpg) | [md/0190_2026101912142522a794622_img.md](md/0190_2026101912142522a794622_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
 | 191 | [images/0191_20261019121425b60385616_img.jpg](images/0191_20261019121425b60385616_img.jpg) | [md/0191_20261019121425b60385616_img.md](md/0191_20261019121425b60385616_img.md) | ok | 136 |
 | 192 | [images/0192_20261019121426488a52298_img.jpg](images/0192_20261019121426488a52298_img.jpg) | [md/0192_20261019121426488a52298_img.md](md/0192_20261019121426488a52298_img.md) | ok | 138 |
