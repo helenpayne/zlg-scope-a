@@ -50,14 +50,18 @@
 .github/workflows/
   pipeline.yml          # 生产 OCR 流水线: prepare 定分片 -> work(矩阵) 并发识别
   ocr_experiment.yml    # 分片实验(显示名 vision-experiment): 图片直接交大模型分类
+  vision_md.yml         # 实验(显示名 vision-md-experiment): 全量采集图片 + 逐图转写 Markdown(不读黑名单)
   smoke.yml             # 冒烟: 环境/CDN/图片/模型连通性探测
 .github/scripts/
   ga_worker.py          # pipeline 的 worker: 并发下载 + 视觉提字 + 回传
   vision_shard.py       # 实验的 worker: 下载 + 图片直判 直选/色彩吧/垃圾 + 汇总
+  vision_md_shard.py    # 实验的 worker: 下载 + 逐图转写 Markdown(独立 manifest, 不读黑名单)
 experiments/
   vision_<aid>.csv      # 该文章分类**数据库**(持久; 只追加/更新, 不删除)
   vision_<aid>_*.csv    # 早期按区间命名的结果(仍在, 会被一并读入作为历史)
   images/<aid>/         # 该文章图片；合并后只保留本期/上一期
+  vision_md_<aid>.csv   # vision-md 实验 manifest(独立; 不参与分类/黑名单)
+  vision_md/<aid>/      # vision-md 实验产物: images/ 原图 + md/ 逐图转写 + README.md
 ```
 
 ### 数据/图片存储与跳过机制（重要）

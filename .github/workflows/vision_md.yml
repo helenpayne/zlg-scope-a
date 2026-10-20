@@ -1,0 +1,176 @@
+name: vision-md-experiment
+
+# 实验性工作流(手动触发):
+# 1) 把一篇文章的全部图片采集进仓库 experiments/vision_md/<aid>/images/
+# 2) 每张图片转写为 Markdown -> experiments/vision_md/<aid>/md/
+# 3) 多 runner × runner 内多窗口并行
+# 本工作流不读取历史分类 CSV、skip、垃圾作者库、白名单, 所有图片一律处理。
+on:
+  workflow_dispatch:
+    inputs:
+      aid:
+        description: '文章ID'
+        default: '2926371'
+      start:
+        description: '起始序号(1-based)'
+        default: '1'
+      end:
+        description: '结束序号(含)'
+        default: '1000'
+      shards:
+        description: '并行 runner 数'
+        default: '10'
+      md_concurrency:
+        description: '每个 runner 内并行窗口数'
+        default: '5'
+      md_models:
+        description: '转写模型(逗号分隔, 依次回退)'
+        default: 'opencode/mimo-v2.6-flash-free,opencode/longcat-2.5-preview-free'
+      force:
+        description: '1=忽略本工作流自己的 manifest 全部重跑'
+        default: '0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vision-md-experiment
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+      shards: ${{ steps.set.outputs.shards }}
+    steps:
+      - id: set
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          n = max(1, min(40, int("${{ inputs.shards }}")))
+          print("shards=" + str(n))
+          print("matrix=" + json.dumps(list(range(n))))
+          PY
+
+  shard:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      API_TOKEN: ${{ secrets.API_TOKEN }}
+      AID: ${{ inputs.aid }}
+      START: ${{ inputs.start }}
+      END: ${{ inputs.end }}
+      SHARD: ${{ matrix.shard }}
+      SHARDS: ${{ needs.prepare.outputs.shards }}
+      MD_CONCURRENCY: ${{ inputs.md_concurrency }}
+      MD_MODELS: ${{ inputs.md_models }}
+      FORCE: ${{ inputs.force }}
+      OUT_DIR: out
+      LLM_TIMEOUT: '240'
+      SHARD_DEADLINE_SEC: '1500'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: deps
+        run: |
+          npm install -g opencode-ai 2>&1 | tail -1
+          opencode --version 2>&1 | head -1
+      - name: run shard
+        run: python .github/scripts/vision_md_shard.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: md-shard-${{ matrix.shard }}
+          path: out/
+
+  combine:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: all
+          merge-multiple: true
+      - name: merge images + markdown
+        env:
+          AID: ${{ inputs.aid }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          DEST="experiments/vision_md/${AID}"
+          mkdir -p "$DEST/images" "$DEST/md"
+          imgs=(all/images/*)
+          mds=(all/md/*)
+          if [ ${#imgs[@]} -gt 0 ]; then cp -f "${imgs[@]}" "$DEST/images/" 2>/dev/null || true; fi
+          if [ ${#mds[@]} -gt 0 ]; then cp -f "${mds[@]}" "$DEST/md/" 2>/dev/null || true; fi
+          python3 - <<'PY'
+          import csv, glob, os
+          from collections import Counter
+          aid = os.environ["AID"]
+          db = f"experiments/vision_md_{aid}.csv"
+          FIELDS = ["idx","sha256","url","name","ext","status",
+                    "model","sec","chars","md","image"]
+          rows = {}
+          files = ([db] if os.path.exists(db) else []) + sorted(glob.glob("all/shard_*.csv"))
+          for f in files:
+              with open(f, newline="", encoding="utf-8") as fh:
+                  for r in csv.DictReader(fh):
+                      if not r.get("sha256"):
+                          continue
+                      key = f"{r.get('idx')}:{r['sha256']}"
+                      old = rows.get(key)
+                      # 新结果成功则覆盖; 新结果失败时保留此前成功记录
+                      if old is None or (r.get("status") or "") == "ok" \
+                              or (old.get("status") or "") != "ok":
+                          rows[key] = r
+          out = sorted(rows.values(), key=lambda r: int(r["idx"]))
+          with open(db, "w", newline="", encoding="utf-8") as fh:
+              w = csv.DictWriter(fh, fieldnames=FIELDS, restval="", extrasaction="ignore")
+              w.writeheader()
+              w.writerows(out)
+          cnt = Counter(r.get("status") or "?" for r in out)
+          readme = [
+              f"# {aid} 图片文字转写",
+              "",
+              f"- 图片总数: **{len(out)}**",
+              f"- 成功: **{cnt.get('ok', 0)}**",
+              f"- 其他状态: {dict((k, v) for k, v in cnt.items() if k != 'ok') or '无'}",
+              "",
+              "| idx | 图片 | Markdown | 状态 | 字数 |",
+              "|---:|---|---|---|---:|",
+          ]
+          for r in out:
+              readme.append(
+                  f"| {r.get('idx')} | [{r.get('image')}]({r.get('image')}) | "
+                  f"[{r.get('md')}]({r.get('md')}) | {r.get('status')} | {r.get('chars')} |")
+          readme_path = f"experiments/vision_md/{aid}/README.md"
+          with open(readme_path, "w", encoding="utf-8") as fh:
+              fh.write("\n".join(readme) + "\n")
+          print(f"{db}: {len(out)} 张, status={dict(cnt)}")
+          PY
+      - name: commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -A "experiments/vision_md/${{ inputs.aid }}" \
+                     "experiments/vision_md_${{ inputs.aid }}.csv"
+          git commit -m "vision-md experiment ${{ inputs.aid }} ${{ inputs.start }}-${{ inputs.end }}" \
+            || echo "no change"
+          for i in 1 2 3 4 5; do
+            git push && break
+            git pull --rebase --autostash origin main || true
+            sleep 3
+          done
