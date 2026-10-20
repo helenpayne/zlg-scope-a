@@ -35,7 +35,7 @@
 - **保持文件名稳定**：工作流的**文件名即分发 URL**。例如可视化实验工作流文件名仍是 `ocr_experiment.yml`（显示名为 vision-experiment），改名会破坏用户收藏的触发地址。
 - **预算/超时**：GitHub 单 job 上限见各工作流 `timeout-minutes`；`ga_worker.py` 用 `BUDGET_SEC`(默认 1500) 提前退出，**未处理的图留给下一轮，不要让它死等**。
 - **失败要回传**：模型彻底失败时调用 `/api/ga/result` 且 `failed=true`，让主仓累计 `ocr_attempt` 并在 3 次后封顶（避免毒丸图反复调度）。
-- **`experiments/` 是自动产物**：`vision_<aid>.csv` 是持久数据库（只增不删），`images/<aid>/` 每次运行刷新。**不要手工编辑**这些文件（会干扰 sha 去重与增量跳过）。
+- **`experiments/` 是自动产物**：`vision_<aid>.csv` 是持久数据库（只增不删）；`images/<aid>/` 在合并阶段清理，只保留**本期与上一期**。**不要手工编辑**这些文件（会干扰 sha 去重与增量跳过）。
 - **改动前先本地校验**，再 push：
   ```
   python3 -c "import ast; ast.parse(open('.github/scripts/xxx.py').read())"
@@ -57,7 +57,7 @@
 experiments/
   vision_<aid>.csv      # 该文章分类**数据库**(持久; 只追加/更新, 不删除)
   vision_<aid>_*.csv    # 早期按区间命名的结果(仍在, 会被一并读入作为历史)
-  images/<aid>/         # 该文章本次运行下载的图片(每次运行清上期, 只留本次)
+  images/<aid>/         # 该文章图片；合并后只保留本期/上一期
 ```
 
 ### 数据/图片存储与跳过机制（重要）
@@ -69,7 +69,7 @@ experiments/
 - **作者白名单（全局）**：`experiments/author_whitelist.txt` 每行一个作者名。凡**判为 `色彩吧` 的行**上的作者（证明其为色彩吧栏目作者）及「色彩吧」本身入白名单；白名单作者**永久保留**（无论之后发什么内容），**不计入、也不命中**垃圾作者库（仍可按内容判垃圾）。combine 时从 `kind=色彩吧` 的行收集作者并累积（只认 `kind`，不看 reason 文本，避免误收）。
 - **多模型投票**：单次判定非确定（同图同词会漂移）。`VISION_MODELS` 的**每个元素 = 一票**，对 `kind` 取多数；平票时列表靠后者优先（默认末位 `mimo`）。`votes` 列记录每票结果。默认 `space-bunny×2 + mimo×1`。`VOTE_RETRY` 控制单票失败重试次数。
 - **`force=1`**：忽略数据库与跳过表、全部重跑（调试用）。
-- **图片按文章分目录**：`experiments/images/<aid>/`；每次运行**合并存储、永不删除**（`mkdir -p` + `cp -n`），保留范围外/历史图片，避免空跑或局部跑误删。历史扁平图片（`experiments/images/*.jpg`）为旧版遗留，未清理。
+- **图片按文章分目录**：`experiments/images/<aid>/`；当前文章先 `cp -n` 合并，随后按 CSV 中提取的期号清理，**仅保留本期与上一期**（含历史扁平图片一并删除）。CSV 数据库不受影响。
 - **扩展性**：一切以 `aid` 为键。后续处理其它文章的图片时，复用同一工作流（传不同 `aid`）或另建工作流即可，互不干扰。
 
 ---

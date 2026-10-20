@@ -109,12 +109,12 @@ jobs:
           API_BASE: ${{ secrets.API_BASE }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
         run: |
-          # 图片: 按文章子目录存放, 采用"合并"策略(不删除), 避免局部/空跑把范围外或已有图片抹掉
+          # 图片: 当前文章先合并到子目录; 合并后仅保留本期/上一期图片(见下方保留策略)
           mkdir -p "experiments/images/${AID}"
           cp -n all/images/* "experiments/images/${AID}/" 2>/dev/null || true
           python3 - <<'PY'
-          import csv, glob, json, os, re
-          from collections import defaultdict
+          import csv, glob, json, os, re, shutil
+          from collections import Counter, defaultdict
           aid = os.environ["AID"]
           FIELDS = ["idx","sha256","url","name","kind","junk","content",
                     "author","reason","votes","model","sec","status"]
@@ -194,6 +194,44 @@ jobs:
           print(f"{db}: 共 {len(out)} 张(本次新增 {new}), kind={dict(k)}, 整批垃圾来源={len(skip)}, 库命中={hitn}")
           print(f"垃圾作者库: 共 {len(authors)} 个(本次新增 {sorted(added)})")
           print(f"作者白名单: 共 {len(whitelist)} 个(本次新增 {sorted(wl_added)})")
+
+          # --- 图片保留策略: 只保留本期与上一期 ---
+          # 从 CSV 的 content 提取期号(色彩吧/直选行会带"xxxx期"), 取众数即该文章期号。
+          def issue_from_rows(items):
+              cnt = Counter()
+              for r in items:
+                  for m in re.findall(r"(\d{3,7})\s*期", r.get("content") or ""):
+                      cnt[m[-3:]] += 1
+              return int(cnt.most_common(1)[0][0]) if cnt else None
+
+          def issue_of_aid(a):
+              items = []
+              for f in glob.glob(f"experiments/vision_{a}*.csv"):
+                  with open(f, newline="", encoding="utf-8") as fh:
+                      items.extend(csv.DictReader(fh))
+              return issue_from_rows(items)
+
+          cur_issue = issue_from_rows(out)
+          if cur_issue is None:
+              print("图片保留: 跳过(无法从CSV确定本期期号)")
+          else:
+              keep = {cur_issue, cur_issue - 1}
+              removed_dirs = removed_flat = 0
+              images_root = "experiments/images"
+              for p in sorted(glob.glob(f"{images_root}/*")):
+                  name = os.path.basename(p)
+                  if os.path.isdir(p) and name.isdigit():
+                      a = int(name)
+                      iss = cur_issue if a == int(aid) else issue_of_aid(a)
+                      if iss not in keep:
+                          shutil.rmtree(p)
+                          removed_dirs += 1
+                          print(f"图片保留: 删除 {name} (期号={iss}, 保留={sorted(keep)})")
+                  elif os.path.isfile(p):
+                      os.remove(p)
+                      removed_flat += 1
+              print(f"图片保留: 保留期号={sorted(keep)}, "
+                    f"删除旧目录={removed_dirs}, 删除历史扁平图={removed_flat}")
           # 自动入库: 色彩吧行 -> ga_api -> MySQL fact_scb_vision (按文章先清后插)
           api = (os.environ.get("API_BASE") or "").rstrip("/")
           tok = os.environ.get("API_TOKEN") or ""
