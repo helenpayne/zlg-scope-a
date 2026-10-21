@@ -1,8 +1,8 @@
 # 2835224 图片文字转写
 
 - 图片总数: **460**
-- 成功: **453**
-- 其他状态: {'err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired)': 5, 'err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired)': 2}
+- 成功: **454**
+- 其他状态: {'err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired)': 5, 'err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired)': 1}
 
 | idx | 图片 | Markdown | 状态 | 字数 |
 |---:|---|---|---|---:|
@@ -138,10 +138,10 @@
 | 130 | [images/0130_202610180055577979d7121_img.jpg](images/0130_202610180055577979d7121_img.jpg) | [md/0130_202610180055577979d7121_img.md](md/0130_202610180055577979d7121_img.md) | ok | 38 |
 | 131 | [images/0131_20261018005558f3fe42194_img.jpg](images/0131_20261018005558f3fe42194_img.jpg) | [md/0131_20261018005558f3fe42194_img.md](md/0131_20261018005558f3fe42194_img.md) | ok | 35 |
 | 132 | [images/0132_2026101800555853bef9953_img.png](images/0132_2026101800555853bef9953_img.png) | [md/0132_2026101800555853bef9953_img.md](md/0132_2026101800555853bef9953_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 133 | [images/0133_20261018005558af01e0037_img.png](images/0133_20261018005558af01e0037_img.png) | [md/0133_20261018005558af01e0037_img.md](md/0133_20261018005558af01e0037_img.md) | err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 133 | [images/0133_20261018005558af01e0037_img.png](images/0133_20261018005558af01e0037_img.png) | [md/0133_20261018005558af01e0037_img.md](md/0133_20261018005558af01e0037_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
 | 134 | [images/0134_2026101800555824e102218_img.png](images/0134_2026101800555824e102218_img.png) | [md/0134_2026101800555824e102218_img.md](md/0134_2026101800555824e102218_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
 | 135 | [images/0135_20261018005559043e97222_img.png](images/0135_20261018005559043e97222_img.png) | [md/0135_20261018005559043e97222_img.md](md/0135_20261018005559043e97222_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
-| 136 | [images/0136_20261018005559d5c984036_img.png](images/0136_20261018005559d5c984036_img.png) | [md/0136_20261018005559d5c984036_img.md](md/0136_20261018005559d5c984036_img.md) | err:llm(opencode/mimo-v2.6-flash-free:TimeoutExpired,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
+| 136 | [images/0136_20261018005559d5c984036_img.png](images/0136_20261018005559d5c984036_img.png) | [md/0136_20261018005559d5c984036_img.md](md/0136_20261018005559d5c984036_img.md) | ok | 3767 |
 | 137 | [images/0137_202610180055594fa1a1058_img.png](images/0137_202610180055594fa1a1058_img.png) | [md/0137_202610180055594fa1a1058_img.md](md/0137_202610180055594fa1a1058_img.md) | err:llm(opencode/mimo-v2.6-flash-free:empty,opencode/longcat-2.5-preview-free:TimeoutExpired) | 0 |
 | 138 | [images/0138_202610180055599c2d52394_img.png](images/0138_202610180055599c2d52394_img.png) | [md/0138_202610180055599c2d52394_img.md](md/0138_202610180055599c2d52394_img.md) | ok | 3456 |
 | 139 | [images/0139_2026101800560092f051914_img.png](images/0139_2026101800560092f051914_img.png) | [md/0139_2026101800560092f051914_img.md](md/0139_2026101800560092f051914_img.md) | ok | 3200 |
