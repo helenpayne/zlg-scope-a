@@ -8,34 +8,37 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        leg: [0,1,2,3]
+        leg: [0,1]
     steps:
       - name: env
-        run: |
-          echo "egress: $(curl -s --max-time 10 ifconfig.me || echo n/a)"
-          node -v
+        run: echo "egress: $(curl -s --max-time 10 ifconfig.me || echo n/a)"
       - name: install
         run: |
-          npm install -g opencode-ai 2>&1 | tail -1
+          npm install -g opencode-ai @kilocode/cli 2>&1 | tail -2
           opencode --version 2>&1 | head -1
-      - name: net-layer
+          kilo --version 2>&1 | tail -1
+      - name: kilo-text
         run: |
-          for h in api.opencode.ai opencode.ai zen.opencode.ai models.dev app.kilo.ai api.openai.com; do
-            curl -s -o /dev/null -w "$h code=%{http_code} dns=%{time_namelookup}s tcp=%{time_connect}s tls=%{time_appconnect}s total=%{time_total}s\n" \
-              --connect-timeout 10 --max-time 20 "https://$h/" || echo "$h curl_rc=$?"
-          done
-      - name: text-call
-        run: |
-          timeout 120 opencode run -m opencode/mimo-v2.6-flash-free --title x \
-            "只回复两个字:ok" --print-logs > /tmp/text.out 2>&1; echo "text exit=$?"
-          grep -aoE "https?://[a-zA-Z0-9./_-]+|error[^\"]{0,120}|timeout[^\"]{0,80}|4[0-9]{2}[^\"]{0,60}|retry[^\"]{0,60}" /tmp/text.out | sort | uniq -c | sort -rn | head -25
-          tail -15 /tmp/text.out
-      - name: image-call
+          timeout 120 kilo run -m kilo/kilo-auto/free --title x \
+            "只回复两个字:ok" > /tmp/kt.out 2>&1; echo "kilo-text exit=$?"
+          tail -10 /tmp/kt.out
+      - name: kilo-vision
         run: |
           curl -sL --max-time 30 -o /tmp/t.jpg -A "Mozilla/5.0" \
-            "https://cdn.wangwang.life/uploads/user/20261025/20261025112855166f08021_img.jpg" || echo dl_fail=$?
-          file /tmp/t.jpg | head -1
-          timeout 150 opencode run -m opencode/mimo-v2.6-flash-free -f /tmp/t.jpg \
-            --title x "图中有什么?一句话" --print-logs > /tmp/img.out 2>&1; echo "img exit=$?"
-          grep -aoE "https?://[a-zA-Z0-9./_-]+|error[^\"]{0,120}|timeout[^\"]{0,80}|4[0-9]{2}[^\"]{0,60}|retry[^\"]{0,60}" /tmp/img.out | sort | uniq -c | sort -rn | head -25
-          tail -15 /tmp/img.out
+            "https://cdn.wangwang.life/uploads/user/20261025/20261025112855166f08021_img.jpg"; \
+            file /tmp/t.jpg | head -1
+          timeout 150 kilo run -m kilo/nvidia/nemotron-3.5-super-vl:free \
+            -f /tmp/t.jpg --title x "图中有什么?一句话" > /tmp/kv.out 2>&1; echo "kilo-img exit=$?"
+          tail -12 /tmp/kv.out
+      - name: opencode-text
+        if: always()
+        run: |
+          timeout 120 opencode run -m opencode/mimo-v2.6-flash-free --title x \
+            "只回复两个字:ok" > /tmp/ot.out 2>&1; echo "oc-text exit=$?"
+          tail -8 /tmp/ot.out
+      - name: opencode-vision
+        if: always()
+        run: |
+          timeout 150 opencode run -m opencode/deepseek-v4.1-flash-free -f /tmp/t.jpg \
+            --title x "图中有什么?一句话" > /tmp/ov.out 2>&1; echo "oc-img exit=$?"
+          tail -8 /tmp/ov.out
