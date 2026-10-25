@@ -11,7 +11,8 @@ jobs:
         leg: [0,1]
     steps:
       - name: env
-        run: echo "egress: $(curl -s --max-time 10 ifconfig.me || echo n/a)"
+        run: |
+          echo "egress=$(curl -s --max-time 10 ifconfig.me || echo n/a)"
       - name: install
         run: |
           npm install -g opencode-ai @kilocode/cli 2>&1 | tail -2
