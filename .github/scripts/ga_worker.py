@@ -18,8 +18,9 @@ MAXN = int(os.environ.get("MAXN") or "0")
 BUDGET = int(os.environ.get("BUDGET_SEC") or "1500")   # 提前退出, 未处理图留待下轮
 IMG_CONC = max(1, int(os.environ.get("IMG_CONCURRENCY") or "3"))
 MODELS = [
+    "opencode/deepseek-v4.1-flash-free",
     "opencode/mimo-v2.6-flash-free",
-    "opencode/longcat-2.5-preview-free",
+    "opencode/nemotron-3-ultra-free",
 ]
 
 PROMPT = ("读取这张彩票预测图,逐行提取图中全部文字行,每行原样输出到JSON数组。"
