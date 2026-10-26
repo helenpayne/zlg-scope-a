@@ -35,7 +35,7 @@ FORCE = os.environ.get("FORCE", "0") == "1"
 # 顺序轮询(首个成功即用), 非投票
 MODELS = [m.strip() for m in os.environ.get(
     "PICK_MODELS",
-    "opencode/space-bunny-free,opencode/big-pickle,opencode/mimo-v2.6-flash-free"
+    "opencode/deepseek-v4.1-flash-free,opencode/mimo-v2.6-flash-free,opencode/big-pickle"
 ).split(",") if m.strip()]
 CONC = int(os.environ.get("PICK_CONCURRENCY", "3"))
 OPENCODE_BIN = os.environ.get("OPENCODE_BIN", "opencode")
