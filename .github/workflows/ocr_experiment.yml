@@ -22,7 +22,7 @@ on:
         default: '5'
       vision_models:
         description: 投票模型(逗号分隔, 每个元素=一票; 平票时靠后者优先)
-        default: 'opencode/space-bunny-free,opencode/space-bunny-free,opencode/mimo-v2.6-flash-free'
+        default: 'opencode/deepseek-v4.1-flash-free,opencode/mimo-v2.6-flash-free,opencode/nemotron-3-ultra-free'
       force:
         description: '1=忽略数据库全部重跑(调试); 0=只处理新图(默认)'
         default: '0'
