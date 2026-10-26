@@ -31,7 +31,7 @@ OUT_DIR = Path(os.environ.get("OUT_DIR", "out"))
 # 同一模型可重复出现以获得多票(降低单次非确定性)。
 MODELS = [m.strip() for m in os.environ.get(
     "VISION_MODELS",
-    "opencode/space-bunny-free,opencode/space-bunny-free,opencode/mimo-v2.6-flash-free"
+    "opencode/deepseek-v4.1-flash-free,opencode/mimo-v2.6-flash-free,opencode/nemotron-3-ultra-free"
 ).split(",") if m.strip()]
 CONC = int(os.environ.get("VISION_CONCURRENCY", "5"))
 FORCE = os.environ.get("FORCE", "0") == "1"
