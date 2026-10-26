@@ -26,7 +26,7 @@ on:
         default: '3'
       pick_models:
         description: 模型(逗号分隔, 顺序轮询; 首个成功即用)
-        default: 'opencode/space-bunny-free,opencode/big-pickle,opencode/mimo-v2.6-flash-free'
+        default: 'opencode/deepseek-v4.1-flash-free,opencode/mimo-v2.6-flash-free,opencode/big-pickle'
       force:
         description: '1=忽略 pick_done 全量重跑; 0=只处理新增(默认)'
         default: '0'
